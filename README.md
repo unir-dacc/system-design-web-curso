@@ -7,18 +7,32 @@ filas...) entra para resolver um problema que acabamos de ver acontecer.
 
 ## Pré-requisitos
 
-Apenas **Docker** (com Compose) e **make**. Nada de Python ou k6 na máquina:
+Apenas **Docker** com Compose v2.20+. Nada de Python ou k6 na máquina:
 tudo roda em containers.
 
 ## Como usar
 
+Cada etapa é uma pasta independente. Entre nela e use o Docker Compose:
+
 ```bash
-make help                                  # lista os comandos
-make up STEP=01                            # sobe a etapa do zero
-make load STEP=01 SCRIPT=abertura-vendas   # teste de carga
-make stats                                 # CPU/memória em tempo real
-make diff FROM=01 TO=02                    # o que mudou entre etapas
-make down                                  # derruba tudo
+cd 01-monolito
+
+docker compose up -d --build --wait                       # sobe a etapa
+docker compose run --rm k6 run /scripts/abertura-vendas.js  # teste de carga
+docker compose run --rm k6 run -e VUS=200 /scripts/abertura-vendas.js
+docker compose stats                                      # CPU/memória em tempo real
+docker compose logs -f ingressa                           # logs do app
+docker compose exec postgres psql -U ingressa             # banco
+docker compose down -v                                    # derruba e apaga os dados
+```
+
+Todas as etapas usam o mesmo nome de projeto (`ingressa`) e as mesmas portas.
+Antes de trocar de etapa, rode `docker compose down -v` na pasta da etapa anterior.
+
+Para ver o que mudou entre duas etapas:
+
+```bash
+git diff --no-index <etapa-anterior> <etapa-seguinte>
 ```
 
 Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
@@ -26,7 +40,6 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 ## Estrutura
 
 ```
-├── Makefile
 ├── shared/                      # igual para todas as etapas
 │   ├── compose.externos.yml     # sistemas externos com limites fixos
 │   ├── gateway-pagamento/       # gateway simulado (lento, configurável)
@@ -46,8 +59,8 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 1. **Sistemas externos são idênticos em todas as etapas** (vêm de `shared/compose.externos.yml`).
    Comportamento controlado por configuração, não por hardware.
 2. **Cada etapa declara o orçamento do Ingressa** no topo do seu compose.
-3. **`make up` sempre começa do zero** (banco e simuladores limpos).
-4. **O gerador de carga (k6) roda com 2 CPUs fixas**, separado do sistema testado.
+3. **Cada medição começa do zero**: `docker compose down -v` antes do `up` (banco e simuladores limpos).
+4. **O gerador de carga (k6) roda com 2 CPUs fixas**, num container separado do sistema testado.
 
 | Componente | CPU | Memória | Observação |
 |------------|-----|---------|------------|
@@ -58,13 +71,21 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 
 ## Simuladores: mudando o comportamento ao vivo
 
+O jeito mais visual é pelo Swagger: **http://localhost:8001/docs** (gateway) e
+**http://localhost:8002/docs** (cinema), nas rotas `/admin/config`. Pelo terminal:
+
 ```bash
-make gateway                                   # ver configuração atual
-make gateway CONFIG='{"latencia_ms": 5000}'    # gateway lento
-make gateway CONFIG='{"taxa_erro": 0.3}'       # 30% de erro 500
-make gateway CONFIG='{"taxa_travamento": 0.1}' # 10% nunca respondem
-make cinema  CONFIG='{"max_concorrencia": 2}'  # cinema ainda mais limitado
-make estado                                    # fila do cinema e assentos por sessão
+curl localhost:8001/admin/config                 # ver a configuração do gateway
+
+# gateway lento / com 30% de erro 500 / com 10% de requisições que nunca respondem
+curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 5000}'
+curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"taxa_erro": 0.3}'
+curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"taxa_travamento": 0.1}'
+
+# cinema ainda mais limitado
+curl -X PATCH localhost:8002/admin/config -H "Content-Type: application/json" -d '{"max_concorrencia": 2}'
+
+curl localhost:8002/admin/estado                 # fila do cinema e assentos por sessão
 ```
 
 Cartões de teste: `tok_aprovado` (sempre aprova), `tok_recusado` (sempre recusa), qualquer outro (5% de recusa).

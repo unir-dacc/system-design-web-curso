@@ -4,7 +4,7 @@
 //
 // Esperado: 38 meias confirmadas e 22 recusadas pela regra (422).
 //
-//   make load SCRIPT=corrida-meia-entrada
+//   docker compose run --rm k6 run /scripts/corrida-meia-entrada.js
 
 import { Counter } from 'k6/metrics';
 import { comprar, gerarCpf, resumo } from './lib/ingressa.js';

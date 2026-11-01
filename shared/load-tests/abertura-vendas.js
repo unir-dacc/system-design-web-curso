@@ -1,8 +1,8 @@
 // Abertura das vendas da estreia (sessão 1, 400 lugares).
 // Cada usuário abre o mapa, escolhe um assento livre e tenta comprar.
 //
-//   make load SCRIPT=abertura-vendas
-//   make load SCRIPT=abertura-vendas VUS=200
+//   docker compose run --rm k6 run /scripts/abertura-vendas.js
+//   docker compose run --rm k6 run -e VUS=200 /scripts/abertura-vendas.js
 
 import http from 'k6/http';
 import { check } from 'k6';

@@ -17,11 +17,14 @@
 
 ## 0. Preparação (antes da aula)
 
+Todos os comandos são rodados **dentro desta pasta** (`01-monolito/`).
+
 ```bash
-make up STEP=01
+docker compose down -v          # garante que começa do zero
+docker compose up -d --build --wait
 ```
 
-Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-mails) e um terminal com `make stats`.
+Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-mails) e um terminal com `docker compose stats`.
 
 ---
 
@@ -77,7 +80,7 @@ Mostre os erros de negócio:
 ## 4. Navegação: o custo de ler (~5 min)
 
 ```bash
-make load SCRIPT=navegacao
+docker compose run --rm k6 run /scripts/navegacao.js
 ```
 
 👉 **Mostre:** consultas ao banco em **~7 ms**, mapa de assentos com p95 **~3,3 s**.
@@ -85,10 +88,10 @@ O mapa vem do cinema a cada visita, e o cinema atende 10 por vez. Motivação da
 
 ## 5. Abertura das vendas (~10 min)
 
-Num terminal deixe `make estado` e `make stats`; no outro:
+Num terminal deixe `docker compose stats`, em outro `watch -n1 curl -s localhost:8002/admin/estado`, e no terceiro:
 
 ```bash
-make load SCRIPT=abertura-vendas
+docker compose run --rm k6 run /scripts/abertura-vendas.js
 ```
 
 Resultado esperado (100 usuários, 1 min):
@@ -100,8 +103,8 @@ Resultado esperado (100 usuários, 1 min):
 | Erros | 0 |
 
 👉 **Mostre:** nada quebrou, mas ninguém espera 11 s para comprar um ingresso.
-No `make stats`, a CPU do Ingressa está **baixa**: o gargalo não é o hardware, é a **espera**.
-No `make estado`, veja a fila do cinema.
+No `docker compose stats`, a CPU do Ingressa está **baixa**: o gargalo não é o hardware, é a **espera**.
+No `/admin/estado`, veja a fila do cinema (`na_fila`).
 
 Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"* (spoiler: quase nada; aulas 00 e 02).
 
@@ -110,8 +113,8 @@ Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"* (spoiler: quase na
 ### Limite de 6 ingressos por CPF
 
 ```bash
-make up STEP=01
-make load SCRIPT=corrida-limite-cpf
+docker compose down -v && docker compose up -d --build --wait
+docker compose run --rm k6 run /scripts/corrida-limite-cpf.js
 ```
 
 👉 **Mostre:** `✗ compras_confirmadas: 20`. Um único CPF comprou **20 ingressos** com limite de 6.
@@ -119,7 +122,7 @@ make load SCRIPT=corrida-limite-cpf
 ### Cota de meia-entrada (40% = 38 lugares na sala 3)
 
 ```bash
-make load SCRIPT=corrida-meia-entrada
+docker compose run --rm k6 run /scripts/corrida-meia-entrada.js
 ```
 
 👉 **Mostre:** `✗ meias_confirmadas: 60` com cota de **38**. Isso é problema legal, não só técnico.
@@ -130,9 +133,13 @@ Pergunta: *"por que o teste com 1 usuário nunca pegaria isso?"*. Resolvido na a
 ## 7. Quando um sistema externo quebra (~5 min)
 
 ```bash
-make gateway CONFIG='{"latencia_ms": 8000}'      # gateway lento
-make load SCRIPT=abertura-vendas VUS=50
-make gateway CONFIG='{"latencia_ms": 1200}'      # volta ao normal
+# gateway lento (também dá para fazer pelo Swagger: http://localhost:8001/docs)
+curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 8000}'
+
+docker compose run --rm k6 run -e VUS=50 /scripts/abertura-vendas.js
+
+# volta ao normal
+curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 1200}'
 ```
 
 👉 **Mostre:** um sistema que não é nosso deixa o Ingressa inteiro lento, porque cada compra segura uma das 40 threads.

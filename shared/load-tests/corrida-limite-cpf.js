@@ -3,7 +3,7 @@
 //
 // Esperado: 6 compras confirmadas e 14 recusadas pela regra (422).
 //
-//   make load SCRIPT=corrida-limite-cpf
+//   docker compose run --rm k6 run /scripts/corrida-limite-cpf.js
 
 import { Counter } from 'k6/metrics';
 import { comprar, gerarCpf, resumo } from './lib/ingressa.js';

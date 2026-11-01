@@ -3,8 +3,8 @@
 # etapas seja justa: o que muda é só a arquitetura do Ingressa.
 #
 # O comportamento (latência, erros...) é simulado e configurável ao vivo:
-#   make gateway CONFIG='{"latencia_ms": 5000}'
-#   make cinema  CONFIG='{"max_concorrencia": 2}'
+#   curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 5000}'
+#   ou pelo Swagger: http://localhost:8001/docs (gateway) e http://localhost:8002/docs (cinema)
 
 services:
   gateway-pagamento:

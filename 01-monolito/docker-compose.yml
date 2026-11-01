@@ -48,3 +48,17 @@ services:
         limits:
           cpus: "1.0"
           memory: 512M
+
+  # Gerador de carga. Não sobe com "up"; é usado com:
+  #   docker compose run --rm k6 run /scripts/abertura-vendas.js
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["carga"]
+    volumes:
+      - ../shared/load-tests:/scripts:ro
+    environment:
+      BASE_URL: http://ingressa:8000
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"

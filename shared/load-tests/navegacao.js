@@ -1,8 +1,8 @@
 // Usuários navegando: lista de filmes -> sessões -> página da sessão -> mapa de assentos.
 // Ninguém compra; só leitura. Mostra o custo de ler sempre do banco e do sistema do cinema.
 //
-//   make load SCRIPT=navegacao
-//   make load SCRIPT=navegacao VUS=100
+//   docker compose run --rm k6 run /scripts/navegacao.js
+//   docker compose run --rm k6 run -e VUS=100 /scripts/navegacao.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
