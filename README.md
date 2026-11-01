@@ -39,8 +39,8 @@ tentam furar o limite de ingressos por CPF.
 - Toda rodada começa do zero: apaga pedidos, ingressos, reservas e cobranças
 - Se nada aparecer na tela, veja `relatorios/k6.log`
 
-O resumo traz público, vendas, tempos de resposta e as metas (inclusive as regras de
-negócio). Cada `DEMO.md` mostra o resultado medido naquela etapa.
+O resumo traz a carga, o que o Ingressa conseguiu atender, o que o fã sentiu e as
+metas (inclusive as regras de negócio).
 
 Todas as etapas usam o mesmo nome de projeto (`ingressa`) e as mesmas portas.
 Antes de trocar de etapa, rode `docker compose down -v` na pasta da etapa anterior.
