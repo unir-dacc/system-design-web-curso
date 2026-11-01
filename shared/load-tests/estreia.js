@@ -55,10 +55,8 @@ const META_MAPA_MS = 2000;
 const META_COMPRA_MS = 3000;
 const META_ERROS = 0.01;
 
-// Regras de negócio
+// Sessões e cambistas
 const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
-const LIMITE_POR_CPF = 6;
-const COTA_MEIA = 160; // 40% de 400
 const CPFS_CAMBISTAS = ['11144477735', '52998224725', '39053344705'];
 
 // --- Métricas ---
@@ -85,8 +83,6 @@ const ingressosConfirmados = new Counter('ingressos_confirmados');
 
 // Conferidos no final
 const vendidos = new Gauge('ingressos_vendidos');
-const maiorCompraPorCpf = new Gauge('maior_compra_por_cpf');
-const maiorQtdMeia = new Gauge('maior_qtd_meia_na_sessao');
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
 http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422)); // erros de negócio não são falhas
@@ -153,8 +149,6 @@ export const options = {
     'http_req_duration{name:mapa,scenario:pico}': [`p(95)<${META_MAPA_MS}`],
     'http_req_duration{name:compra,scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
     'http_req_failed{scenario:subida}': ['rate>=0'], // para separar os erros do pico (conta feita no resultado)
-    maior_compra_por_cpf: [`value<=${LIMITE_POR_CPF}`],
-    maior_qtd_meia_na_sessao: [`value<=${COTA_MEIA}`],
 
     // Só para guardar os números
     ...guardar([
@@ -319,20 +313,8 @@ export function teardown() {
   // Quem sabe quantos assentos foram vendidos é o cinema
   if (estado) vendidos.add(SESSOES.reduce((total, s) => total + estado.sessoes[s].vendido, 0));
 
-  // As regras de negócio (CPF e meia) só o Ingressa sabe
-  let maiorCpf = 0;
-  let maiorMeia = 0;
-  for (const sessao of SESSOES) {
-    const r = http.get(`${INGRESSA}/sessoes/${sessao}/resumo`, { timeout: '10s' });
-    if (r.status !== 200) {
-      naoRespondeu.add(1);
-      return;
-    }
-    maiorCpf = Math.max(maiorCpf, r.json('maior_compra_por_cpf'));
-    maiorMeia = Math.max(maiorMeia, r.json('meia_vendidas'));
-  }
-  maiorCompraPorCpf.add(maiorCpf);
-  maiorQtdMeia.add(maiorMeia);
+  // O Ingressa ainda responde depois que o público foi embora?
+  if (http.get(`${INGRESSA}/health`, { timeout: '10s' }).status !== 200) naoRespondeu.add(1);
 }
 
 // --- Resultado ---
@@ -440,16 +422,6 @@ function calcularResultado(data) {
           texto: 'Menos de 1% de requisições com erro',
           ok: enviadas ? comErro / enviadas < META_ERROS : null,
           detalhe: enviadas ? `${((comErro / enviadas) * 100).toFixed(1)}% com erro` : 'nenhuma requisição',
-        },
-        {
-          texto: `No máximo ${LIMITE_POR_CPF} ingressos por CPF`,
-          ok: travou ? null : passou('maior_compra_por_cpf'),
-          detalhe: travou ? 'não conferido' : `maior compra: ${v('maior_compra_por_cpf').value}`,
-        },
-        {
-          texto: `No máximo ${COTA_MEIA} meias-entradas por sessão`,
-          ok: travou ? null : passou('maior_qtd_meia_na_sessao'),
-          detalhe: travou ? 'não conferido' : `maior venda: ${v('maior_qtd_meia_na_sessao').value}`,
         },
       ],
     },

@@ -46,7 +46,7 @@ Existe **um único teste**, `shared/load-tests/estreia.js`: a abertura das venda
 - Se nada aparecer na tela, veja `relatorios/k6.log`
 
 O relatório traz a capacidade, o que aconteceu no pico (o caminho do usuário, os engajados,
-a espera) e as metas, inclusive as regras de negócio.
+a espera) e as metas.
 
 Todas as etapas usam o mesmo nome de projeto (`ingressa`) e as mesmas portas.
 Antes de trocar de etapa, rode `docker compose down -v` na pasta da etapa anterior.

@@ -139,7 +139,13 @@ Rode a mesma estreia com bem menos usuários:
 docker compose run --rm --service-ports k6 run -e USUARIOS=3 /scripts/estreia.js
 ```
 
-👉 **Observe:** as metas de regra de negócio (limite por CPF e cota de meia-entrada).
+Depois que o teste acabar, pergunte ao Ingressa como ficou a sessão 1, onde os robôs cambistas compram:
+
+```bash
+curl -s localhost:8000/sessoes/1/resumo; echo
+```
+
+👉 **Observe:** `maior_compra_por_cpf` (o limite é 6 ingressos por CPF) e `meia_vendidas` comparado com `cota_meia`.
 
 Volte para `app/compra.py` e procure o momento em que as regras são verificadas e o momento em que os ingressos são gravados.
 
