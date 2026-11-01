@@ -29,7 +29,7 @@ Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-m
 ### Sobre o teste de carga
 
 Existe **um único teste**: `estreia.js`, a abertura das vendas do maior filme da história.
-Fãs chegando aos montes e robôs cambistas, tudo ao mesmo tempo, por 1 minuto.
+Fãs chegando aos montes (desistem após 60 s), fãs muito engajados (nunca desistem) e robôs cambistas, tudo ao mesmo tempo, por 1 minuto.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**.
 - **Depois:** abra **`relatorios/estreia.html`** no navegador e projete para a turma

@@ -75,6 +75,7 @@ function metas(lista) {
 
 export function gerarHtml(r) {
   const f = r.funil;
+  const e = r.engajados;
   const porSeg = (total) => decimal(total / r.duracaoS);
 
   return `<!doctype html>
@@ -138,7 +139,7 @@ export function gerarHtml(r) {
 <header><div>
   <div class="selo">Teste de carga · ${r.etapa}</div>
   <h1>Estreia do maior filme da história</h1>
-  <p>${r.fasPorSegundo} fãs chegando por segundo + ${r.robos} robôs cambistas, durante 1 minuto</p>
+  <p>Por 1 minuto: ${r.fasPorSegundo} fãs chegando por segundo (desistem após 60 s), ${r.engajados.porSegundo} fãs muito engajados por segundo (nunca desistem) e ${r.robos} robôs cambistas</p>
 </div></header>
 <main>
   <section class="veredito">
@@ -157,7 +158,16 @@ export function gerarHtml(r) {
 
   <h2>O caminho do fã</h2>
   <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Desistiram depois de esperar 30 s: <b>${inteiro(r.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(r.esgotado)}</b></div>
+  <div class="detalhe" style="margin-top:10px">Desistiram depois de esperar 60 s: <b>${inteiro(r.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(r.esgotado)}</b></div>
+
+  <h2>Os fãs muito engajados</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
+  <div class="cartoes">
+    ${cartao('Conseguiram comprar', `${pct(e.compraram, e.chegaram)}%`, `${inteiro(e.compraram)} de ${inteiro(e.chegaram)} engajados`, pct(e.compraram, e.chegaram))}
+    ${cartao('Ainda esperando no fim', inteiro(e.aindaEsperando), 'o teste acabou e eles continuavam lá')}
+    ${cartao('Tempo até comprar', tempo(e.tempo.mediana), `metade em até isso; o pior: ${tempo(e.tempo.pior)}`)}
+    ${cartao('Tentativas', inteiro(e.tentativas), `${e.chegaram ? decimal(e.tentativas / e.chegaram) : '0,0'} por engajado, em média`)}
+  </div>
 
   <h2>A espera</h2>
   <div class="bloco">

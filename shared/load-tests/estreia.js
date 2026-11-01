@@ -1,11 +1,13 @@
 // ESTREIA DO MAIOR FILME DA HISTÓRIA
 //
 // As vendas abrem e uma multidão tenta comprar ao mesmo tempo:
-//   - fãs: chegam aos montes, abrem o mapa e compram de 1 a 4 ingressos (alguns meia-entrada)
+//   - fãs: chegam aos montes, abrem o mapa e compram de 1 a 4 ingressos (alguns meia-entrada).
+//     Se esperarem mais de 60 s, desistem.
+//   - fãs muito engajados: nunca desistem. Esperam o quanto for preciso e, se algo
+//     der errado, tentam de novo até comprar ou até esgotar.
 //   - cambistas: robôs com poucos CPFs comprando sem parar, tentando furar o limite
 //
-// Os fãs continuam chegando mesmo se o site estiver lento. Quem espera mais
-// de 30 s desiste. No final, o resultado aparece no terminal e em
+// Os fãs continuam chegando mesmo se o site estiver lento. No final, o resultado aparece no terminal e em
 // relatorios/estreia.html (para abrir no navegador e mostrar para a turma).
 //
 //   docker compose run --rm --service-ports k6 run /scripts/estreia.js
@@ -14,7 +16,7 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { sleep } from 'k6';
-import { Counter, Gauge } from 'k6/metrics';
+import { Counter, Gauge, Trend } from 'k6/metrics';
 import { gerarHtml } from './relatorio.js';
 
 const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
@@ -23,6 +25,8 @@ const GATEWAY = 'http://gateway-pagamento:8000';
 
 const ETAPA = __ENV.ETAPA || 'Ingressa';
 const FAS_POR_SEGUNDO = Number(__ENV.FAS || 50);
+const ENGAJADOS_POR_SEGUNDO = Math.max(1, Math.round(FAS_POR_SEGUNDO / 10));
+const PACIENCIA = '60s'; // quanto o fã comum espera antes de desistir
 const ROBOS_CAMBISTAS = 20;
 const DURACAO_S = 60;
 const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
@@ -39,6 +43,13 @@ const fasTentaramComprar = new Counter('fas_tentaram_comprar');
 const fasCompraram = new Counter('fas_compraram');
 const desistiram = new Counter('fas_desistiram');
 const esgotado = new Counter('fas_encontraram_esgotado');
+
+// Fãs muito engajados
+const engajadosChegaram = new Counter('engajados_chegaram');
+const engajadosCompraram = new Counter('engajados_compraram');
+const engajadosEsgotado = new Counter('engajados_encontraram_esgotado');
+const engajadosTentativas = new Counter('engajados_tentativas');
+const engajadosTempo = new Trend('engajados_tempo_ate_comprar', true);
 
 // Vendas (fãs e robôs)
 const comprasConcluidas = new Counter('compras_concluidas');
@@ -60,11 +71,25 @@ export const options = {
       startRate: 0,
       timeUnit: '1s',
       preAllocatedVUs: 100,
-      maxVUs: 1500,
+      maxVUs: 2500,
       stages: [
         { duration: '10s', target: FAS_POR_SEGUNDO }, // as vendas abrem
         { duration: `${DURACAO_S - 10}s`, target: FAS_POR_SEGUNDO },
       ],
+      gracefulStop: '60s', // quem chegou no fim também tem 60 s de paciência
+    },
+    engajados: {
+      executor: 'ramping-arrival-rate',
+      exec: 'engajado',
+      startRate: 0,
+      timeUnit: '1s',
+      preAllocatedVUs: 20,
+      maxVUs: 1000,
+      stages: [
+        { duration: '10s', target: ENGAJADOS_POR_SEGUNDO },
+        { duration: `${DURACAO_S - 10}s`, target: ENGAJADOS_POR_SEGUNDO },
+      ],
+      gracefulStop: '60s', // depois do minuto de vendas, ainda esperam mais 1 min antes do teste encerrar
     },
     cambistas: { executor: 'constant-vus', exec: 'cambista', vus: ROBOS_CAMBISTAS, duration: `${DURACAO_S}s` },
   },
@@ -99,8 +124,13 @@ function souFa() {
   return exec.scenario.name === 'fas';
 }
 
+// O fã engajado espera "para sempre" (até o teste acabar)
+function paciencia() {
+  return exec.scenario.name === 'engajados' ? '10m' : PACIENCIA;
+}
+
 function abrirMapa(sessao) {
-  const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout: '30s', tags: { name: 'mapa' } });
+  const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout: paciencia(), tags: { name: 'mapa' } });
   if (r.status === 0 && souFa()) desistiram.add(1);
   if (r.status !== 200) return null;
   return r.json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
@@ -110,7 +140,7 @@ function comprar(sessao, cpf, itens, cartao) {
   const corpo = { sessao_id: sessao, nome: 'Cliente', cpf, email: `${cpf}@exemplo.com`, cartao_token: cartao, itens };
   const r = http.post(`${INGRESSA}/pedidos`, JSON.stringify(corpo), {
     headers: { 'Content-Type': 'application/json' },
-    timeout: '30s',
+    timeout: paciencia(),
     tags: { name: 'compra' },
   });
   if (r.status === 201) {
@@ -138,6 +168,35 @@ export function fa() {
   }));
   fasTentaramComprar.add(1);
   if (comprar(sessao, gerarCpf(), itens, `tok_fa_${__VU}`) === 201) fasCompraram.add(1); // ~5% dos cartões são recusados
+}
+
+export function engajado() {
+  engajadosChegaram.add(1);
+  const inicio = Date.now();
+  const sessoesEsgotadas = new Set();
+
+  // Não desiste: tenta até comprar, até esgotar tudo ou até o teste acabar
+  while (sessoesEsgotadas.size < SESSOES.length) {
+    engajadosTentativas.add(1);
+    const sessao = sortear(SESSOES.filter((s) => !sessoesEsgotadas.has(s)))[0];
+    const livres = abrirMapa(sessao);
+    if (livres === null) {
+      sleep(1); // o site deu erro: respira e tenta de novo
+      continue;
+    }
+    if (livres.length === 0) {
+      sessoesEsgotadas.add(sessao);
+      continue;
+    }
+    const itens = sortear(livres, 2).map((assento) => ({ assento, tipo: 'inteira' }));
+    if (comprar(sessao, gerarCpf(), itens, `tok_engajado_${__VU}`) === 201) {
+      engajadosCompraram.add(1);
+      engajadosTempo.add(Date.now() - inicio);
+      return;
+    }
+    sleep(1); // assento ocupado, cartão recusado ou erro: tenta de novo
+  }
+  engajadosEsgotado.add(1);
 }
 
 export function cambista() {
@@ -225,6 +284,15 @@ function calcularResultado(data) {
     },
     desistiram: n('fas_desistiram'),
     esgotado: n('fas_encontraram_esgotado'),
+    engajados: {
+      porSegundo: ENGAJADOS_POR_SEGUNDO,
+      chegaram: n('engajados_chegaram'),
+      compraram: n('engajados_compraram'),
+      esgotado: n('engajados_encontraram_esgotado'),
+      aindaEsperando: n('engajados_chegaram') - n('engajados_compraram') - n('engajados_encontraram_esgotado'),
+      tentativas: n('engajados_tentativas'),
+      tempo: { mediana: m('engajados_tempo_ate_comprar').med, pior: m('engajados_tempo_ate_comprar').max },
+    },
     picoSimultaneos: m('vus').max || 0,
     enviadas,
     respondidas: enviadas - comErro,
@@ -258,11 +326,12 @@ function gerarTexto(r) {
   const espera = (e) => `metade em até ${seg(e.mediana)}, 95% em até ${seg(e.p95)}, o pior ${seg(e.pior)}`;
   const icone = (ok) => (ok === null ? '⚠️ ' : ok ? '✅' : '❌');
   const f = r.funil;
+  const e = r.engajados;
 
   return `
 ════════════════════════════════════════════════════════════════════
   ESTREIA DO MAIOR FILME DA HISTÓRIA · ${r.etapa}
-  ${r.fasPorSegundo} fãs chegando por segundo + ${r.robos} robôs cambistas, por 1 minuto
+  ${r.fasPorSegundo} fãs + ${r.engajados.porSegundo} fãs engajados chegando por segundo, ${r.robos} robôs cambistas, 1 minuto
 ════════════════════════════════════════════════════════════════════
 
   O CAMINHO DO FÃ
@@ -271,7 +340,14 @@ function gerarTexto(r) {
     Viram o mapa de assentos ........ ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
     Tentaram comprar ................ ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
     Compraram ....................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
-    Desistiram depois de 30 s ....... ${r.desistiram}
+    Desistiram depois de 60 s ....... ${r.desistiram}
+
+  OS FÃS MUITO ENGAJADOS (nunca desistem, tentam de novo até conseguir)
+    Chegaram ........................ ${e.chegaram}  (${e.porSegundo} por segundo)
+    Compraram ....................... ${e.compraram}  (${pct(e.compraram, e.chegaram)})
+    Ainda esperando no fim do teste . ${e.aindaEsperando}
+    Tempo até comprar ............... metade em até ${seg(e.tempo.mediana)}, o pior ${seg(e.tempo.pior)}
+    Tentativas no total ............. ${e.tentativas}
 
   O SISTEMA
     Pico de usuários ao mesmo tempo . ${r.picoSimultaneos}

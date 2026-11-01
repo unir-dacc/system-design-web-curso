@@ -30,8 +30,9 @@ docker compose down -v                                    # derruba e apaga os d
 
 Existe **um único teste**, `shared/load-tests/estreia.js`: a abertura das vendas do
 **maior filme da história**. Durante 1 minuto chegam 50 fãs por segundo (eles continuam
-chegando mesmo com o site lento, e desistem depois de 30 s), enquanto robôs cambistas
-tentam furar o limite de ingressos por CPF.
+chegando mesmo com o site lento, e desistem depois de 60 s), 5 fãs muito engajados por
+segundo (nunca desistem e tentam de novo até conseguir) e robôs cambistas tentando furar
+o limite de ingressos por CPF.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**
 - **Depois:** relatório visual em **`relatorios/estreia.html`**, para abrir no navegador e
