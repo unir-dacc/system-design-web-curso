@@ -119,7 +119,25 @@ docker compose restart ingressa        # se precisar destravar
 
 Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"*
 
-## 5. Com pouca gente
+## 5. Até quantos fãs o Ingressa aguenta?
+
+O mesmo teste, mas a chegada de fãs sobe em degraus (1 por segundo, 2, 3...). Em cada degrau,
+o teste confere se o site continua viável, com as mesmas metas da estreia.
+
+```bash
+docker compose restart ingressa        # se ele travou na estreia
+docker compose run --rm --service-ports k6 run -e MODO=capacidade /scripts/estreia.js
+xdg-open relatorios/capacidade.html
+```
+
+👉 **Observe:** o número grande no topo e a tabela degrau a degrau. Em qual degrau a linha fica vermelha?
+O que acontece com as "pessoas no site ao mesmo tempo" depois desse ponto?
+
+Pergunta: *"quantas pessoas a estreia do maior filme da história vai trazer? E quantas o Ingressa aguenta?"*
+
+Anote esse número: ele vai ser comparado com o das próximas etapas.
+
+## 6. Com pouca gente
 
 Rode a mesma estreia com bem menos fãs:
 
@@ -133,7 +151,7 @@ Volte para `app/compra.py` e procure o momento em que as regras são verificadas
 
 Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*
 
-## 6. Quando um sistema externo fica lento
+## 7. Quando um sistema externo fica lento
 
 ```bash
 # gateway lento (também dá para fazer pelo Swagger: http://localhost:8001/docs)

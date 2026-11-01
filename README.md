@@ -20,6 +20,7 @@ cd 01-monolito
 docker compose up -d --build --wait                       # sobe a etapa
 docker compose run --rm --service-ports k6 run /scripts/estreia.js   # teste de carga
 docker compose run --rm --service-ports k6 run -e FAS=100 /scripts/estreia.js  # mais fãs por segundo
+docker compose run --rm --service-ports k6 run -e MODO=capacidade /scripts/estreia.js  # até quantos fãs aguenta?
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
@@ -39,6 +40,10 @@ o limite de ingressos por CPF.
   projetar (um resumo também aparece no terminal e em `relatorios/estreia.txt`)
 - Toda rodada começa do zero: apaga pedidos, ingressos, reservas e cobranças
 - Se nada aparecer na tela, veja `relatorios/k6.log`
+
+**Modo capacidade** (`-e MODO=capacidade`): em vez do pico, a chegada de fãs sobe em
+degraus (1 por segundo, 2, 3...) e o teste diz até quantos fãs por segundo o Ingressa
+continua viável. Resultado em `relatorios/capacidade.html`.
 
 O resumo traz a carga, o que o Ingressa conseguiu atender, o que o fã sentiu e as
 metas (inclusive as regras de negócio).

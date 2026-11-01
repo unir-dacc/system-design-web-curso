@@ -17,11 +17,10 @@ function alertas(r) {
         ' Para destravar: <code>docker compose restart ingressa</code>',
     );
   }
-  const fantasmas = r.vendidos - r.confirmados;
-  if (fantasmas > 0) {
+  if (r.semConfirmacao > 0) {
     lista.push(
-      `<b>${inteiro(fantasmas)} ingressos</b> foram vendidos para quem já tinha desistido:` +
-        ' a pessoa foi embora sem saber que comprou.',
+      `<b>${inteiro(r.semConfirmacao)} ingressos</b> foram vendidos, mas o teste acabou antes de o fã` +
+        ' receber a confirmação: ele ainda estava esperando na tela de pagamento.',
     );
   }
   return lista.map((texto) => `<div class="alerta">⚠️ ${texto}</div>`).join('');
@@ -73,17 +72,7 @@ function metas(lista) {
     .join('');
 }
 
-export function gerarHtml(r) {
-  const f = r.funil;
-  const e = r.engajados;
-  const porSeg = (total) => decimal(total / r.duracaoS);
-
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Estreia · ${r.etapa}</title>
+const ESTILO = `
 <style>
   :root {
     --fundo: #f4f1ea; --papel: #ffffff; --tinta: #1c1917; --apagado: #78716c; --linha: #e7e2d8;
@@ -133,13 +122,47 @@ export function gerarHtml(r) {
     .espera { grid-template-columns: 1fr 1fr 1fr; }
     .espera .nome { grid-column: 1 / -1; }
   }
+  .degrau { display: grid; grid-template-columns: 90px repeat(5, 1fr) 70px; gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
+  .degrau + .degrau { margin-top: 6px; }
+  .degrau.cabecalho { color: var(--apagado); font-size: 13px; padding-top: 0; padding-bottom: 4px; }
+  .degrau.viavel { background: #f0fdf4; } .degrau.inviavel { background: #fef2f2; }
+  .degrau .fas { font-weight: 800; font-size: 20px; }
+  .degrau .estado { font-size: 22px; text-align: center; }
+  @media (max-width: 700px) {
+    .degrau { grid-template-columns: 60px repeat(3, 1fr) 40px; font-size: 14px; }
+    .degrau .opcional { display: none; }
+  }
 </style>
+`;
+
+function pagina(titulo, corpo) {
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${titulo}</title>
+${ESTILO}
 </head>
 <body>
+${corpo}
+</body>
+</html>
+`;
+}
+
+export function gerarHtml(r) {
+  const f = r.funil;
+  const e = r.engajados;
+  const porSeg = (total) => decimal(total / r.duracaoS);
+
+  return pagina(
+    `Estreia · ${r.etapa}`,
+    `
 <header><div>
   <div class="selo">Teste de carga · ${r.etapa}</div>
   <h1>Estreia do maior filme da história</h1>
-  <p>Por 1 minuto: ${r.fasPorSegundo} fãs chegando por segundo (desistem após 60 s), ${r.engajados.porSegundo} fãs muito engajados por segundo (nunca desistem) e ${r.robos} robôs cambistas</p>
+  <p>Por 1 minuto: ${r.fasPorSegundo} fãs chegando por segundo (desistem se o site não carregar em 60 s), ${r.engajados.porSegundo} fãs muito engajados por segundo (nunca desistem) e ${r.robos} robôs cambistas</p>
 </div></header>
 <main>
   <section class="veredito">
@@ -150,7 +173,14 @@ export function gerarHtml(r) {
 
   <h2>O sistema</h2>
   <div class="cartoes">
-    ${cartao('Ingressos vendidos', inteiro(r.vendidos), `de ${inteiro(r.lugares)} lugares`, pct(r.vendidos, r.lugares))}
+    ${cartao(
+      'Ingressos vendidos',
+      inteiro(r.vendidos),
+      `de ${inteiro(r.lugares)} lugares<br>` +
+        `fãs: ${inteiro(r.confirmados.fas)} · engajados: ${inteiro(r.confirmados.engajados)} · ` +
+        `robôs: ${inteiro(r.confirmados.cambistas)} · sem resposta até o fim: ${inteiro(r.semConfirmacao)}`,
+      pct(r.vendidos, r.lugares),
+    )}
     ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'esperando uma resposta no mesmo instante')}
     ${cartao('Requisições respondidas', `${porSeg(r.respondidas)}/s`, `de ${porSeg(r.enviadas)}/s enviadas`, pct(r.respondidas, r.enviadas))}
     ${cartao('Compras concluídas', `${porSeg(r.compras)}/s`, `${inteiro(r.compras)} no total, contando os robôs`)}
@@ -158,7 +188,7 @@ export function gerarHtml(r) {
 
   <h2>O caminho do fã</h2>
   <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Desistiram depois de esperar 60 s: <b>${inteiro(r.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(r.esgotado)}</b></div>
+  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(r.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(r.esgotado)}</b></div>
 
   <h2>Os fãs muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
@@ -180,7 +210,68 @@ export function gerarHtml(r) {
 
   <footer>Gráficos ao longo do minuto: <code>relatorios/ultimo-teste.html</code></footer>
 </main>
-</body>
-</html>
-`;
+`,
+  );
+}
+
+export function gerarHtmlCapacidade(r) {
+  const classe = (valor, limite) => (valor === undefined ? '' : valor <= limite ? 'bom' : 'ruim');
+  const porcento = (fracao) => (fracao === undefined ? '—' : `${decimal(fracao * 100)}%`);
+
+  let veredito;
+  if (!r.capacidade) {
+    veredito = `<div class="grande">Inviável <small>desde o primeiro degrau</small></div>
+      <p>Não aguentou nem ${r.degraus[0].fasPorSegundo} fã por segundo.</p>`;
+  } else {
+    const quebra = r.quebrou
+      ? `Com <b>${r.quebrou.fasPorSegundo} fãs por segundo</b>, o site fica inviável.`
+      : 'Aguentou todos os degraus testados: tente valores maiores com <code>-e DEGRAUS=...</code>';
+    veredito = `<div class="grande">${r.capacidade.fasPorSegundo} fãs/s <small>é o máximo que o Ingressa aguenta</small></div>
+      <p>≈ <b>${inteiro(r.capacidade.simultaneos)} pessoas</b> usando o site ao mesmo tempo. ${quebra}</p>`;
+  }
+
+  const linhas = r.degraus
+    .map(
+      (d) => `<div class="degrau ${d.viavel ? 'viavel' : 'inviavel'}">
+        <div class="fas">${d.fasPorSegundo}/s</div>
+        <div>${d.simultaneos === undefined ? '—' : inteiro(d.simultaneos)}</div>
+        <div class="opcional">${decimal(d.comprasPorSegundo)}/s</div>
+        <div class="${classe(d.p95Mapa, r.metas.mapaMs)}">${tempo(d.p95Mapa)}</div>
+        <div class="${classe(d.p95Compra, r.metas.compraMs)}">${tempo(d.p95Compra)}</div>
+        <div class="opcional ${d.erros === undefined ? '' : d.erros < r.metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
+        <div class="estado">${d.viavel ? '✅' : '❌'}</div>
+      </div>`,
+    )
+    .join('');
+
+  return pagina(
+    `Capacidade · ${r.etapa}`,
+    `
+<header><div>
+  <div class="selo">Teste de capacidade · ${r.etapa}</div>
+  <h1>Até quantos fãs o Ingressa aguenta?</h1>
+  <p>A chegada de fãs sobe em degraus de ${r.duracaoDegrauS} s. Em cada degrau, conferimos se o site continua viável.</p>
+</div></header>
+<main>
+  <section class="veredito">${veredito}</section>
+
+  <h2>Degrau a degrau</h2>
+  <div class="bloco">
+    <div class="degrau cabecalho">
+      <div>fãs chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
+      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div></div>
+    </div>
+    ${linhas}
+  </div>
+
+  <h2>O que é "viável"</h2>
+  <div class="metas">
+    <div class="meta">95% dos fãs abrem o mapa em até ${tempo(r.metas.mapaMs)}</div>
+    <div class="meta">95% dos fãs concluem a compra em até ${tempo(r.metas.compraMs)}</div>
+    <div class="meta">Menos de ${porcento(r.metas.erros)} de requisições com erro</div>
+  </div>
+
+  <footer>"Pessoas no site ao mesmo tempo" é estimado pela Lei de Little: fãs chegando por segundo × tempo médio que cada um passa no site.</footer>
+</main>`,
+  );
 }
