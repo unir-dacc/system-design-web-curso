@@ -29,8 +29,8 @@ Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-m
 ### Sobre o teste de carga
 
 Existe **um único teste**: `estreia.js`, a abertura das vendas do maior filme da história.
-Primeiro o público cresce aos poucos, para descobrir até quantos fãs o Ingressa aguenta. Depois vem o pico:
-fãs chegando aos montes, fãs muito engajados (nunca desistem) e robôs cambistas, tudo ao mesmo tempo.
+Primeiro o público cresce aos poucos, para descobrir até quantos usuários o Ingressa aguenta. Depois vem o pico:
+usuários chegando aos montes, usuários muito engajados (nunca desistem) e robôs cambistas, tudo ao mesmo tempo.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**.
 - **Depois:** abra **`relatorios/estreia.html`** no navegador e projete para a turma
@@ -96,8 +96,8 @@ Pergunta: *"de todo esse tempo, quanto o Ingressa passou trabalhando de verdade?
 
 A rodada tem duas partes e leva alguns minutos:
 
-1. **A subida:** o público cresce aos poucos (1 fã por segundo, 2, 3...). Em cada degrau, o teste confere se o site continua viável.
-2. **O pico:** as vendas abrem de vez, com fãs, fãs muito engajados e robôs cambistas ao mesmo tempo.
+1. **A subida:** o público cresce aos poucos (1 usuário por segundo, 2, 3...). Em cada degrau, o teste confere se o site continua viável.
+2. **O pico:** as vendas abrem de vez, com usuários, usuários muito engajados e robôs cambistas ao mesmo tempo.
 
 Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel em http://localhost:5665:
 
@@ -110,12 +110,12 @@ Leia o relatório com a turma, bloco por bloco:
 
 | Bloco | Perguntas |
 |-------|-----------|
-| Topo | Até quantos fãs por segundo o Ingressa aguenta? E no pico, quantos fãs conseguiram comprar? Apareceu algum alerta? |
+| Topo | Até quantos usuários por segundo o Ingressa aguenta? E no pico, quantos usuários conseguiram comprar? Apareceu algum alerta? |
 | A subida | Em qual degrau a linha fica vermelha? O que acontece com as "pessoas no site ao mesmo tempo" depois desse ponto? |
 | O pico: o sistema | Compare as requisições enviadas com as respondidas. Quantos usuários esperavam ao mesmo tempo? |
-| O pico: o caminho do fã | Em qual etapa o público se perdeu? |
+| O pico: o caminho do usuário | Em qual etapa o público se perdeu? |
 | O pico: os engajados | Quem nunca desiste conseguiu comprar? |
-| A espera e as metas | Quanto tempo o fã esperou? Quais metas passaram? |
+| A espera e as metas | Quanto tempo o usuário esperou? Quais metas passaram? |
 
 👉 **Observe também:** no `docker compose stats`, CPU e memória do Ingressa durante o teste.
 Depois que o teste acaba, o Ingressa ainda responde?
@@ -133,10 +133,10 @@ Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"*
 
 ## 5. Com pouca gente
 
-Rode a mesma estreia com bem menos fãs:
+Rode a mesma estreia com bem menos usuários:
 
 ```bash
-docker compose run --rm --service-ports k6 run -e FAS=3 /scripts/estreia.js
+docker compose run --rm --service-ports k6 run -e USUARIOS=3 /scripts/estreia.js
 ```
 
 👉 **Observe:** as metas de regra de negócio (limite por CPF e cota de meia-entrada).
@@ -151,7 +151,7 @@ Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*
 # gateway lento (também dá para fazer pelo Swagger: http://localhost:8001/docs)
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 8000}'
 
-docker compose run --rm --service-ports k6 run -e FAS=3 /scripts/estreia.js
+docker compose run --rm --service-ports k6 run -e USUARIOS=3 /scripts/estreia.js
 
 # volta ao normal
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 1200}'

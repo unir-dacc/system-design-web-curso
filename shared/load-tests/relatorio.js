@@ -4,6 +4,8 @@
 const inteiro = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const decimal = (n) => (n || 0).toFixed(1).replace('.', ',');
 const pct = (parte, total) => (total ? Math.round((parte / total) * 100) : 0);
+// "1 usuário", "2 usuários"
+const usuarios = (n) => `${n} ${n === 1 ? 'usuário' : 'usuários'}`;
 const tempo = (ms) => {
   if (ms === undefined || ms === null) return '—';
   return ms >= 1000 ? `${decimal(ms / 1000)} s` : `${Math.round(ms)} ms`;
@@ -13,7 +15,7 @@ function alertas(r) {
   const lista = [];
   if (r.subida.caiuEm) {
     lista.push(
-      `O Ingressa <b>caiu ainda na subida</b>, com ${r.subida.caiuEm.fasPorSegundo} fãs por segundo,` +
+      `O Ingressa <b>caiu ainda na subida</b>, com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)} por segundo,` +
         ' antes de o pico começar: o resultado do pico mostra um sistema que já estava fora do ar.',
     );
   }
@@ -25,7 +27,7 @@ function alertas(r) {
   }
   if (r.semConfirmacao > 0) {
     lista.push(
-      `<b>${inteiro(r.semConfirmacao)} ingressos</b> foram vendidos, mas o teste acabou antes de o fã` +
+      `<b>${inteiro(r.semConfirmacao)} ingressos</b> foram vendidos, mas o teste acabou antes de o usuário` +
         ' receber a confirmação: ele ainda estava esperando na tela de pagamento.',
     );
   }
@@ -167,12 +169,12 @@ ${corpo}
 
 function vereditoCapacidade(s) {
   if (!s.capacidade) {
-    return `<div class="grande">Inviável</div><p>Não aguentou nem ${s.degraus[0].fasPorSegundo} fã por segundo.</p>`;
+    return `<div class="grande">Inviável</div><p>Não aguentou nem ${s.degraus[0].usuariosPorSegundo} usuário por segundo.</p>`;
   }
   const quebra = s.quebrou
-    ? `Com ${s.quebrou.fasPorSegundo} fãs/s, fica inviável.`
+    ? `Com ${usuarios(s.quebrou.usuariosPorSegundo)}/s, fica inviável.`
     : 'Aguentou todos os degraus.';
-  return `<div class="grande">${s.capacidade.fasPorSegundo} fãs/s</div>
+  return `<div class="grande">${usuarios(s.capacidade.usuariosPorSegundo)}/s</div>
     <p>≈ ${inteiro(s.capacidade.simultaneos)} pessoas no site ao mesmo tempo. ${quebra}</p>`;
 }
 
@@ -181,7 +183,7 @@ function tabelaDeDegraus(s, metas) {
   const porcento = (fracao) => (fracao === undefined ? '—' : `${decimal(fracao * 100)}%`);
   const linhas = s.degraus.map(
     (d) => `<div class="degrau ${d.viavel ? 'viavel' : 'inviavel'}">
-      <div class="fas">${d.fasPorSegundo}/s</div>
+      <div class="fas">${d.usuariosPorSegundo}/s</div>
       <div>${d.simultaneos === undefined ? '—' : inteiro(d.simultaneos)}</div>
       <div class="opcional">${decimal(d.comprasPorSegundo)}/s</div>
       <div class="${classe(d.p95Mapa, metas.mapaMs)}">${tempo(d.p95Mapa)}</div>
@@ -191,7 +193,7 @@ function tabelaDeDegraus(s, metas) {
     </div>`,
   );
   return `<div class="degrau cabecalho">
-      <div>fãs chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
+      <div>usuários chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
       <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div></div>
     </div>
     ${linhas.join('')}`;
@@ -202,7 +204,6 @@ export function gerarHtml(r) {
   const p = r.pico;
   const f = p.funil;
   const e = r.engajados;
-  const c = r.confirmados;
   const porSeg = (total) => decimal(total / p.duracaoS);
 
   return pagina(
@@ -212,7 +213,7 @@ export function gerarHtml(r) {
   <div class="selo">Teste de carga · ${r.etapa}</div>
   <h1>Estreia do maior filme da história</h1>
   <p>Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
-  ${p.fasPorSegundo} fãs por segundo, ${p.engajadosPorSegundo} fãs muito engajados por segundo e ${p.robos} robôs cambistas, durante 1 minuto.</p>
+  ${usuarios(p.usuariosPorSegundo)} por segundo, ${usuarios(p.engajadosPorSegundo)} muito engajados por segundo e ${p.robos} robôs cambistas, durante 1 minuto.</p>
 </div></header>
 <main>
   <section class="veredito dupla">
@@ -223,35 +224,28 @@ export function gerarHtml(r) {
     <div>
       <div class="rotulo">No pico</div>
       <div class="grande">${pct(f.compraram, f.chegaram)}%</div>
-      <p>dos fãs conseguiram comprar: ${inteiro(f.compraram)} de ${inteiro(f.chegaram)}.</p>
+      <p>dos usuários conseguiram comprar: ${inteiro(f.compraram)} de ${inteiro(f.chegaram)}.</p>
     </div>
   </section>
   ${alertas(r)}
 
-  <h2>1 · A subida: até quantos fãs o Ingressa aguenta?</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">A chegada de fãs sobe em degraus de ${s.duracaoDegrauS} s. Em cada degrau, conferimos se o site continua viável.</p>
+  <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Em cada degrau, conferimos se o site continua viável.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
   <h2>2 · O pico: o sistema</h2>
   <div class="cartoes">
-    ${cartao(
-      'Ingressos vendidos',
-      inteiro(r.vendidos),
-      `de ${inteiro(r.lugares)} lugares, na rodada inteira<br>` +
-        `subida: ${inteiro(c.subida)} · pico: ${inteiro(c.pico)} · engajados: ${inteiro(c.engajados)} · ` +
-        `robôs: ${inteiro(c.cambistas)} · sem resposta até o fim: ${inteiro(r.semConfirmacao)}`,
-      pct(r.vendidos, r.lugares),
-    )}
+    ${cartao('Ingressos vendidos', inteiro(r.vendidos), `de ${inteiro(r.lugares)} lugares, na rodada inteira`, pct(r.vendidos, r.lugares))}
     ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'esperando uma resposta no mesmo instante')}
     ${cartao('Requisições respondidas', `${porSeg(p.respondidas)}/s`, `de ${porSeg(p.enviadas)}/s enviadas`, pct(p.respondidas, p.enviadas))}
-    ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras de fãs no pico`)}
+    ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras no pico`)}
   </div>
 
-  <h2>2 · O pico: o caminho do fã</h2>
+  <h2>2 · O pico: o caminho do usuário</h2>
   <div class="bloco">${funil(f)}</div>
   <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
 
-  <h2>2 · O pico: os fãs muito engajados</h2>
+  <h2>2 · O pico: os usuários muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
   <div class="cartoes">
     ${cartao('Conseguiram comprar', `${pct(e.compraram, e.chegaram)}%`, `${inteiro(e.compraram)} de ${inteiro(e.chegaram)} engajados`, pct(e.compraram, e.chegaram))}
@@ -270,7 +264,7 @@ export function gerarHtml(r) {
   <div class="metas">${metas(r.metas.lista)}</div>
 
   <footer>
-    "Pessoas no site ao mesmo tempo" é estimado pela Lei de Little: fãs chegando por segundo × tempo médio que cada um passa no site.<br>
+    "Pessoas no site ao mesmo tempo" é estimado pela Lei de Little: usuários chegando por segundo × tempo médio que cada um passa no site.<br>
     Gráficos ao longo da rodada: <code>relatorios/ultimo-teste.html</code>
   </footer>
 </main>`,

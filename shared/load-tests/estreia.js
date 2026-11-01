@@ -2,21 +2,21 @@
 //
 // Uma rodada, duas partes:
 //
-//   1. A SUBIDA: antes do pico, os fãs chegam em degraus (1 por segundo, 2, 3...).
+//   1. A SUBIDA: antes do pico, os usuários chegam em degraus (1 por segundo, 2, 3...).
 //      Em cada degrau conferimos se o site continua viável. É assim que
-//      descobrimos até quantos fãs o Ingressa aguenta.
+//      descobrimos até quantos usuários o Ingressa aguenta.
 //
 //   2. O PICO: as vendas abrem e, por 1 minuto, chegam ao mesmo tempo:
-//      - fãs: abrem o mapa e compram de 1 a 4 ingressos (alguns meia-entrada).
+//      - usuários: abrem o mapa e compram de 1 a 4 ingressos (alguns meia-entrada).
 //        Se o site não carregar em 60 s, desistem. Depois de clicar em comprar,
 //        esperam a resposta.
-//      - fãs muito engajados: nunca desistem; tentam de novo até comprar ou esgotar
+//      - usuários muito engajados: nunca desistem; tentam de novo até comprar ou esgotar
 //      - cambistas: robôs com poucos CPFs comprando sem parar, tentando furar o limite
 //
 // No final: relatorios/estreia.html (para projetar) e um resumo no terminal.
 //
 //   docker compose run --rm --service-ports k6 run /scripts/estreia.js
-//   docker compose run --rm --service-ports k6 run -e FAS=100 /scripts/estreia.js
+//   docker compose run --rm --service-ports k6 run -e USUARIOS=100 /scripts/estreia.js
 
 import http from 'k6/http';
 import exec from 'k6/execution';
@@ -30,22 +30,22 @@ const GATEWAY = 'http://gateway-pagamento:8000';
 const ETAPA = __ENV.ETAPA || 'Ingressa';
 
 // O pico
-const FAS_NO_PICO = Number(__ENV.FAS || 50);
+const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 50);
 
 // A subida: degraus sempre abaixo do pico
 const DEGRAUS = (__ENV.DEGRAUS || '1,2,3,4,6,8,12,16,24,32')
   .split(',')
   .map(Number)
-  .filter((d) => d < FAS_NO_PICO);
-if (DEGRAUS.length === 0) throw new Error('O pico precisa de pelo menos 2 fãs por segundo (-e FAS=2)');
+  .filter((d) => d < USUARIOS_NO_PICO);
+if (DEGRAUS.length === 0) throw new Error('O pico precisa de pelo menos 2 usuários por segundo (-e USUARIOS=2)');
 const DURACAO_DEGRAU_S = 15;
 const SUBIDA_S = DEGRAUS.length * DURACAO_DEGRAU_S;
 
-const ENGAJADOS_POR_SEGUNDO = Math.max(1, Math.round(FAS_NO_PICO / 10));
+const ENGAJADOS_POR_SEGUNDO = Math.max(1, Math.round(USUARIOS_NO_PICO / 10));
 const ROBOS_CAMBISTAS = 20;
 const PICO_S = 60;
 
-// O fã comum espera o site carregar por no máximo isso; depois de clicar em
+// O usuário comum espera o site carregar por no máximo isso; depois de clicar em
 // comprar, todo mundo espera a resposta.
 const PACIENCIA = '60s';
 const ESPERA_DA_COMPRA = '10m';
@@ -63,16 +63,16 @@ const CPFS_CAMBISTAS = ['11144477735', '52998224725', '39053344705'];
 
 // --- Métricas ---
 
-// O caminho do fã (subida e pico são separados pela tag "scenario")
-const fasEntraram = new Counter('fas_entraram');
-const fasViramMapa = new Counter('fas_viram_mapa');
-const fasTentaramComprar = new Counter('fas_tentaram_comprar');
-const fasCompraram = new Counter('fas_compraram');
-const desistiram = new Counter('fas_desistiram');
-const esgotado = new Counter('fas_encontraram_esgotado');
-const tempoDoFa = new Trend('tempo_do_fa', true); // do momento em que chega até ir embora
+// O caminho do usuário (subida e pico são separados pela tag "scenario")
+const usuariosEntraram = new Counter('usuarios_entraram');
+const usuariosViramMapa = new Counter('usuarios_viram_mapa');
+const usuariosTentaramComprar = new Counter('usuarios_tentaram_comprar');
+const usuariosCompraram = new Counter('usuarios_compraram');
+const desistiram = new Counter('usuarios_desistiram');
+const esgotado = new Counter('usuarios_encontraram_esgotado');
+const tempoDoUsuario = new Trend('tempo_do_usuario', true); // do momento em que chega até ir embora
 
-// Fãs muito engajados
+// Usuários muito engajados
 const engajadosChegaram = new Counter('engajados_chegaram');
 const engajadosCompraram = new Counter('engajados_compraram');
 const engajadosEsgotado = new Counter('engajados_encontraram_esgotado');
@@ -118,17 +118,17 @@ function guardar(metricas, condicao = 'count>=0') {
 export const options = {
   scenarios: {
     subida: chegada(
-      'fa',
+      'usuario',
       DEGRAUS.flatMap((d) => [
         { duration: '2s', target: d },
         { duration: `${DURACAO_DEGRAU_S - 2}s`, target: d },
       ]),
     ),
     pico: chegada(
-      'fa',
+      'usuario',
       [
-        { duration: '10s', target: FAS_NO_PICO }, // as vendas abrem
-        { duration: `${PICO_S - 10}s`, target: FAS_NO_PICO },
+        { duration: '10s', target: USUARIOS_NO_PICO }, // as vendas abrem
+        { duration: `${PICO_S - 10}s`, target: USUARIOS_NO_PICO },
       ],
       { startTime: inicioDoPico },
     ),
@@ -152,32 +152,28 @@ export const options = {
     // Metas do pico
     'http_req_duration{name:mapa,scenario:pico}': [`p(95)<${META_MAPA_MS}`],
     'http_req_duration{name:compra,scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
-    'http_req_failed{scenario:pico}': [`rate<${META_ERROS}`],
+    'http_req_failed{scenario:subida}': ['rate>=0'], // para separar os erros do pico (conta feita no resultado)
     maior_compra_por_cpf: [`value<=${LIMITE_POR_CPF}`],
     maior_qtd_meia_na_sessao: [`value<=${COTA_MEIA}`],
 
     // Só para guardar os números
     ...guardar([
-      'fas_entraram{scenario:pico}',
-      'fas_viram_mapa{scenario:pico}',
-      'fas_tentaram_comprar{scenario:pico}',
-      'fas_compraram{scenario:pico}',
-      'fas_desistiram{scenario:pico}',
-      'fas_encontraram_esgotado{scenario:pico}',
+      'usuarios_entraram{scenario:pico}',
+      'usuarios_viram_mapa{scenario:pico}',
+      'usuarios_tentaram_comprar{scenario:pico}',
+      'usuarios_compraram{scenario:pico}',
+      'usuarios_desistiram{scenario:pico}',
+      'usuarios_encontraram_esgotado{scenario:pico}',
       'dropped_iterations{scenario:pico}',
-      'http_reqs{scenario:pico}',
-      'compras_concluidas{scenario:pico}',
-      'ingressos_confirmados{scenario:subida}',
-      'ingressos_confirmados{scenario:pico}',
-      'ingressos_confirmados{scenario:engajados}',
-      'ingressos_confirmados{scenario:cambistas}',
-      ...DEGRAUS.flatMap((d) => [`compras_concluidas{degrau:${d}}`, `fas_entraram{degrau:${d}}`]),
+      'http_reqs{scenario:subida}',
+      'compras_concluidas{scenario:subida}',
+      ...DEGRAUS.flatMap((d) => [`compras_concluidas{degrau:${d}}`, `usuarios_entraram{degrau:${d}}`]),
     ]),
     ...guardar(
       DEGRAUS.flatMap((d) => [
         `http_req_duration{name:mapa,degrau:${d}}`,
         `http_req_duration{name:compra,degrau:${d}}`,
-        `tempo_do_fa{degrau:${d}}`,
+        `tempo_do_usuario{degrau:${d}}`,
       ]),
       'max>=0',
     ),
@@ -203,7 +199,7 @@ function sortear(lista, quantidade = 1) {
   return [...lista].sort(() => Math.random() - 0.5).slice(0, quantidade);
 }
 
-function souFaComum() {
+function souUsuarioComum() {
   return exec.scenario.name === 'subida' || exec.scenario.name === 'pico';
 }
 
@@ -215,7 +211,7 @@ function degrauAtual() {
 function abrirMapa(sessao, tags = {}) {
   const timeout = exec.scenario.name === 'engajados' ? ESPERA_DA_COMPRA : PACIENCIA;
   const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout, tags: { name: 'mapa', ...tags } });
-  if (r.status === 0 && souFaComum()) desistiram.add(1, tags);
+  if (r.status === 0 && souUsuarioComum()) desistiram.add(1, tags);
   if (r.status !== 200) return null;
   return r.json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
 }
@@ -236,19 +232,19 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
 
 // --- Personagens ---
 
-export function fa() {
+export function usuario() {
   const tags = exec.scenario.name === 'subida' ? { degrau: String(degrauAtual()) } : {};
   const inicio = Date.now();
   tentarComprar(tags);
-  tempoDoFa.add(Date.now() - inicio, tags);
+  tempoDoUsuario.add(Date.now() - inicio, tags);
 }
 
 function tentarComprar(tags) {
-  fasEntraram.add(1, tags);
+  usuariosEntraram.add(1, tags);
   const sessao = sortear(SESSOES)[0];
   const livres = abrirMapa(sessao, tags);
   if (livres === null) return;
-  fasViramMapa.add(1, tags);
+  usuariosViramMapa.add(1, tags);
   if (livres.length === 0) return esgotado.add(1, tags);
 
   const quantidade = 1 + Math.floor(Math.random() * 4);
@@ -256,8 +252,8 @@ function tentarComprar(tags) {
     assento,
     tipo: Math.random() < 0.4 ? 'meia' : 'inteira',
   }));
-  fasTentaramComprar.add(1, tags);
-  if (comprar(sessao, gerarCpf(), itens, `tok_fa_${__VU}`, tags) === 201) fasCompraram.add(1, tags); // ~5% dos cartões são recusados
+  usuariosTentaramComprar.add(1, tags);
+  if (comprar(sessao, gerarCpf(), itens, `tok_usuario_${__VU}`, tags) === 201) usuariosCompraram.add(1, tags); // ~5% dos cartões são recusados
 }
 
 export function engajado() {
@@ -360,9 +356,9 @@ function calcularResultado(data) {
     const p95Mapa = p95(`http_req_duration{name:mapa,degrau:${d}}`);
     const p95Compra = p95(`http_req_duration{name:compra,degrau:${d}}`);
     const erros = v(`http_req_failed{degrau:${d}}`).rate;
-    const tempoMedio = v(`tempo_do_fa{degrau:${d}}`).avg;
+    const tempoMedio = v(`tempo_do_usuario{degrau:${d}}`).avg;
     return {
-      fasPorSegundo: d,
+      usuariosPorSegundo: d,
       comprasPorSegundo: n(`compras_concluidas{degrau:${d}}`) / DURACAO_DEGRAU_S,
       p95Mapa,
       p95Compra,
@@ -378,21 +374,15 @@ function calcularResultado(data) {
   // Capacidade = o maior degrau viável (um degrau azarado no meio não derruba o resultado)
   const viaveis = degraus.filter((d) => d.viavel);
   const capacidade = viaveis.length ? viaveis[viaveis.length - 1] : null;
-  const quebrou = degraus.find((d) => !d.viavel && (!capacidade || d.fasPorSegundo > capacidade.fasPorSegundo)) || null;
+  const quebrou = degraus.find((d) => !d.viavel && (!capacidade || d.usuariosPorSegundo > capacidade.usuariosPorSegundo)) || null;
 
   // 2. O pico
-  const enviadas = n('http_reqs{scenario:pico}');
-  const comErro = v('http_req_failed{scenario:pico}').passes || 0;
+  // No pico conta todo mundo: usuários comuns, engajados e robôs (venda é venda)
+  const enviadas = n('http_reqs') - n('http_reqs{scenario:subida}');
+  const comErro = (v('http_req_failed').passes || 0) - (v('http_req_failed{scenario:subida}').passes || 0);
   const naoEntraram = n('dropped_iterations{scenario:pico}');
   const travou = Boolean(v('ingressa_nao_respondeu').value);
-  const confirmados = {
-    subida: n('ingressos_confirmados{scenario:subida}'),
-    pico: n('ingressos_confirmados{scenario:pico}'),
-    engajados: n('ingressos_confirmados{scenario:engajados}'),
-    cambistas: n('ingressos_confirmados{scenario:cambistas}'),
-  };
   const totalVendidos = v('ingressos_vendidos').value || 0;
-  const totalConfirmados = confirmados.subida + confirmados.pico + confirmados.engajados + confirmados.cambistas;
 
   return {
     etapa: ETAPA,
@@ -407,22 +397,22 @@ function calcularResultado(data) {
       caiuEm: degraus.find((d) => d.erros !== undefined && d.erros >= 0.5) || null,
     },
     pico: {
-      fasPorSegundo: FAS_NO_PICO,
+      usuariosPorSegundo: USUARIOS_NO_PICO,
       engajadosPorSegundo: ENGAJADOS_POR_SEGUNDO,
       robos: ROBOS_CAMBISTAS,
       duracaoS: PICO_S,
       funil: {
-        chegaram: n('fas_entraram{scenario:pico}') + naoEntraram,
-        entraram: n('fas_entraram{scenario:pico}'),
-        viramMapa: n('fas_viram_mapa{scenario:pico}'),
-        tentaramComprar: n('fas_tentaram_comprar{scenario:pico}'),
-        compraram: n('fas_compraram{scenario:pico}'),
+        chegaram: n('usuarios_entraram{scenario:pico}') + naoEntraram,
+        entraram: n('usuarios_entraram{scenario:pico}'),
+        viramMapa: n('usuarios_viram_mapa{scenario:pico}'),
+        tentaramComprar: n('usuarios_tentaram_comprar{scenario:pico}'),
+        compraram: n('usuarios_compraram{scenario:pico}'),
       },
-      desistiram: n('fas_desistiram{scenario:pico}'),
-      esgotado: n('fas_encontraram_esgotado{scenario:pico}'),
+      desistiram: n('usuarios_desistiram{scenario:pico}'),
+      esgotado: n('usuarios_encontraram_esgotado{scenario:pico}'),
       enviadas,
       respondidas: enviadas - comErro,
-      compras: n('compras_concluidas{scenario:pico}'),
+      compras: n('compras_concluidas') - n('compras_concluidas{scenario:subida}'),
       espera: {
         mapa: espera('http_req_duration{name:mapa,scenario:pico}'),
         compra: espera('http_req_duration{name:compra,scenario:pico}'),
@@ -437,17 +427,20 @@ function calcularResultado(data) {
     },
     picoSimultaneos: v('vus').max || 0,
     vendidos: totalVendidos,
-    confirmados,
     // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
-    semConfirmacao: Math.max(0, totalVendidos - totalConfirmados),
+    semConfirmacao: Math.max(0, totalVendidos - n('ingressos_confirmados')),
     metas: {
       mapaMs: META_MAPA_MS,
       compraMs: META_COMPRA_MS,
       erros: META_ERROS,
       lista: [
-        medida(`95% dos fãs abrem o mapa em até ${META_MAPA_MS / 1000} s`, 'http_req_duration{name:mapa,scenario:pico}', 'nenhum mapa chegou a abrir'),
-        medida(`95% dos fãs concluem a compra em até ${META_COMPRA_MS / 1000} s`, 'http_req_duration{name:compra,scenario:pico}', 'ninguém chegou a comprar'),
-        { texto: 'Menos de 1% de requisições com erro', ok: passou('http_req_failed{scenario:pico}') },
+        medida(`95% dos usuários abrem o mapa em até ${META_MAPA_MS / 1000} s`, 'http_req_duration{name:mapa,scenario:pico}', 'nenhum mapa chegou a abrir'),
+        medida(`95% dos usuários concluem a compra em até ${META_COMPRA_MS / 1000} s`, 'http_req_duration{name:compra,scenario:pico}', 'ninguém chegou a comprar'),
+        {
+          texto: 'Menos de 1% de requisições com erro',
+          ok: enviadas ? comErro / enviadas < META_ERROS : null,
+          detalhe: enviadas ? `${((comErro / enviadas) * 100).toFixed(1)}% com erro` : 'nenhuma requisição',
+        },
         {
           texto: `No máximo ${LIMITE_POR_CPF} ingressos por CPF`,
           ok: travou ? null : passou('maior_compra_por_cpf'),
@@ -463,6 +456,9 @@ function calcularResultado(data) {
   };
 }
 
+// "1 usuário", "2 usuários"
+const usuarios = (n) => `${n} ${n === 1 ? 'usuário' : 'usuários'}`;
+
 function gerarTexto(r) {
   const seg = (ms) => (ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
   const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : '0%');
@@ -476,17 +472,17 @@ function gerarTexto(r) {
   const porSeg = (total) => (total / p.duracaoS).toFixed(1);
 
   let capacidade;
-  if (!s.capacidade) capacidade = `Não aguentou nem ${s.degraus[0].fasPorSegundo} fã por segundo.`;
-  else if (!s.quebrou) capacidade = `Aguentou todos os degraus (até ${s.capacidade.fasPorSegundo} fãs/s).`;
+  if (!s.capacidade) capacidade = `Não aguentou nem ${s.degraus[0].usuariosPorSegundo} usuário por segundo.`;
+  else if (!s.quebrou) capacidade = `Aguentou todos os degraus (até ${usuarios(s.capacidade.usuariosPorSegundo)}/s).`;
   else {
     capacidade =
-      `Aguenta até ${s.capacidade.fasPorSegundo} fãs por segundo (≈ ${s.capacidade.simultaneos} pessoas no site ao mesmo tempo).\n` +
-      `    Com ${s.quebrou.fasPorSegundo} fãs por segundo, fica inviável.`;
+      `Aguenta até ${usuarios(s.capacidade.usuariosPorSegundo)} por segundo (≈ ${s.capacidade.simultaneos} pessoas no site ao mesmo tempo).\n` +
+      `    Com ${usuarios(s.quebrou.usuariosPorSegundo)} por segundo, fica inviável.`;
   }
 
   const degraus = s.degraus.map(
     (d) =>
-      `    ${col(d.fasPorSegundo, 5)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
+      `    ${col(d.usuariosPorSegundo, 10)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
       `${col(d.comprasPorSegundo.toFixed(1), 11)}${col(seg(d.p95Mapa), 11)}${col(seg(d.p95Compra), 12)}` +
       `${col(pctFracao(d.erros), 9)}    ${d.viavel ? '✅' : '❌'}`,
   );
@@ -496,18 +492,18 @@ function gerarTexto(r) {
   ESTREIA DO MAIOR FILME DA HISTÓRIA · ${r.etapa}
 ════════════════════════════════════════════════════════════════════
 
-  1. A SUBIDA: até quantos fãs o Ingressa aguenta?
+  1. A SUBIDA: até quantos usuários o Ingressa aguenta?
 
     ${capacidade}
 
-    fãs/s  no site junto  compras/s  95% mapa  95% compra   erros   viável?
+    usuários/s  no site junto  compras/s  95% mapa  95% compra   erros   viável?
 ${degraus.join('\n')}
 
-  2. O PICO: ${p.fasPorSegundo} fãs/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
+  2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
 
-    Fãs que conseguiram comprar ..... ${f.compraram} de ${f.chegaram}  (${pct(f.compraram, f.chegaram)})
+    Usuários que conseguiram comprar ..... ${f.compraram} de ${f.chegaram}  (${pct(f.compraram, f.chegaram)})
 
-    O caminho do fã
+    O caminho do usuário
       Chegaram ...................... ${f.chegaram}
       Conseguiram entrar no site .... ${f.entraram}  (${pct(f.entraram, f.chegaram)})
       Viram o mapa de assentos ...... ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
@@ -515,7 +511,7 @@ ${degraus.join('\n')}
       Compraram ..................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
       Desistiram (site não carregou)  ${p.desistiram}
 
-    Os fãs muito engajados (nunca desistem)
+    Os usuários muito engajados (nunca desistem)
       Compraram ..................... ${e.compraram} de ${e.chegaram}  (${pct(e.compraram, e.chegaram)})
       Ainda esperando no fim ........ ${e.aindaEsperando}
       Tempo até comprar ............. metade em até ${seg(e.tempo.mediana)}, o pior ${seg(e.tempo.pior)}
@@ -530,11 +526,10 @@ ${degraus.join('\n')}
       Comprar ......... metade em até ${seg(p.espera.compra.mediana)}, 95% em até ${seg(p.espera.compra.p95)}, o pior ${seg(p.espera.compra.pior)}
 
   INGRESSOS VENDIDOS: ${r.vendidos} de ${r.lugares}
-    fãs na subida ${r.confirmados.subida} · fãs no pico ${r.confirmados.pico} · engajados ${r.confirmados.engajados} · robôs ${r.confirmados.cambistas} · sem resposta até o fim ${r.semConfirmacao}
 
   METAS DO PICO
 ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
-${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${r.subida.caiuEm.fasPorSegundo} fãs/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
+${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
   Relatório para projetar: relatorios/estreia.html
 ════════════════════════════════════════════════════════════════════
 `;
