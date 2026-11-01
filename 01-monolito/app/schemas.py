@@ -44,6 +44,7 @@ class ResumoSessaoOut(BaseModel):
     ingressos_vendidos: int
     meia_vendidas: int
     cota_meia: int
+    maior_compra_por_cpf: int
 
 
 class ItemPedido(BaseModel):

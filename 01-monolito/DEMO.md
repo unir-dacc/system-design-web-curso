@@ -26,13 +26,16 @@ docker compose up -d --build --wait
 
 Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-mails) e um terminal com `docker compose stats`.
 
-### Sobre os testes de carga
+### Sobre o teste de carga
 
-- **Painel em tempo real:** enquanto um teste roda, abra **http://localhost:5665**. Ele só existe durante o teste.
-- **Relatório:** ao final, o painel completo fica salvo em `relatorios/ultimo-teste.html` (abra no navegador).
-  Testes muito curtos, como as corridas, não geram relatório: veja o resultado no terminal.
-- **Cada teste começa do zero:** pedidos, ingressos, reservas e cobranças são apagados no início.
-  A configuração dos simuladores (latência, erros) é mantida. Para não apagar: `-e RESET=0`.
+Existe **um único teste**: `estreia.js`, a abertura das vendas do maior filme da história.
+Fãs chegando aos montes e robôs cambistas, tudo ao mesmo tempo, por 1 minuto.
+
+- **Durante:** painel em tempo real em **http://localhost:5665**.
+- **Depois:** o resumo aparece no terminal e fica salvo em `relatorios/estreia.txt`.
+  O painel completo fica em `relatorios/ultimo-teste.html`.
+- **Cada rodada começa do zero** (a configuração dos simuladores é mantida).
+- Se nada aparecer na tela, veja `relatorios/k6.log`.
 
 ---
 
@@ -85,67 +88,69 @@ Mostre os erros de negócio:
 
 👉 **Ponto-chave:** o Ingressa passa **mais de 95% do tempo esperando** outros sistemas. Guarde isso para a aula de async (00) e de filas (05).
 
-## 4. Navegação: o custo de ler (~5 min)
+## 4. A estreia: o pico do pico (~10 min)
+
+Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel em http://localhost:5665:
 
 ```bash
-docker compose run --rm --service-ports k6 run /scripts/navegacao.js
+docker compose run --rm --service-ports k6 run /scripts/estreia.js
 ```
 
-👉 **Mostre:** consultas ao banco em **~7 ms**, mapa de assentos com p95 **~3,3 s**.
-O mapa vem do cinema a cada visita, e o cinema atende 10 por vez. Motivação da aula de **cache (04)**.
+Resultado medido (50 fãs/s + 20 robôs cambistas, 1 minuto):
 
-## 5. Abertura das vendas (~10 min)
+```
+  PÚBLICO
+    Fãs que tentaram comprar ........ 1761
+    Não conseguiram nem entrar ...... 988
+    Desistiram (mais de 30 s) ....... 1801
 
-Num terminal deixe `docker compose stats`, em outro `watch -n1 curl -s localhost:8002/admin/estado`, e no terceiro
-rode o teste e abra o painel em http://localhost:5665:
+  VENDAS
+    Ingressos vendidos .............. 52 de 4800
+    ...e o fã viu a confirmação ..... 0
+
+  METAS
+    ❌ Mapa abre em até 2 s para 95% dos fãs
+    ❌ Compra em até 3 s para 95% dos fãs
+    ❌ Menos de 1% de erros ................. erros: 97.0%
+    ⚠️  o Ingressa TRAVOU e não respondeu nem depois que o público foi embora.
+```
+
+👉 **Mostre:**
+- **52 ingressos vendidos de 4800**, e nenhum fã viu a confirmação. Os 52 foram vendidos (e cobrados!) para quem já tinha desistido.
+- No painel, a duração das requisições cola em 30 s: é o tempo da paciência do fã.
+- No `docker compose stats`, a **memória** do Ingressa encostada nos 512 MB: milhares de pedidos acumulados.
+- O Ingressa **não volta sozinho**. O servidor continua trabalhando para quem já foi embora.
 
 ```bash
-docker compose run --rm --service-ports k6 run /scripts/abertura-vendas.js
+docker compose restart ingressa        # para destravar
 ```
-
-Resultado esperado (100 usuários, 1 min):
-
-| Métrica | Valor aproximado |
-|---------|------------------|
-| Compras confirmadas | ~325 (≈ 4,6 por segundo) |
-| p95 da compra | **~11 s** |
-| Erros | 0 |
-
-👉 **Mostre:** no painel, o gráfico de duração das requisições subindo enquanto os usuários entram.
-Nada quebrou, mas ninguém espera 11 s para comprar um ingresso.
-No `docker compose stats`, a CPU do Ingressa está **baixa**: o gargalo não é o hardware, é a **espera**.
-No `/admin/estado`, veja a fila do cinema (`na_fila`).
 
 Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"* (spoiler: quase nada; aulas 00 e 02).
 
-## 6. Os bugs escondidos (~10 min)
+## 5. Os bugs escondidos (~10 min)
 
-### Limite de 6 ingressos por CPF
-
-```bash
-docker compose run --rm --service-ports k6 run /scripts/corrida-limite-cpf.js
-```
-
-👉 **Mostre:** `✗ compras_confirmadas: 20`. Um único CPF comprou **20 ingressos** com limite de 6.
-
-### Cota de meia-entrada (40% = 38 lugares na sala 3)
+No pico não dá nem para ver os bugs, porque nada funciona. Com pouca gente, o sistema responde e eles aparecem:
 
 ```bash
-docker compose run --rm --service-ports k6 run /scripts/corrida-meia-entrada.js
+docker compose run --rm --service-ports k6 run -e FAS=3 /scripts/estreia.js
 ```
 
-👉 **Mostre:** `✗ meias_confirmadas: 60` com cota de **38**. Isso é problema legal, não só técnico.
+```
+  METAS
+    ❌ Máximo de 6 ingressos por CPF ........... maior compra: 16
+```
 
+👉 **Mostre:** os robôs cambistas compraram **16 ingressos com o mesmo CPF**, com limite de 6.
 Volte para `app/compra.py` e leia o comentário ⚠️ do *check-then-act*.
-Pergunta: *"por que o teste com 1 usuário nunca pegaria isso?"*. Resolvido na aula de **banco de dados (03)**.
+Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*. Resolvido na aula de **banco de dados (03)**.
 
-## 7. Quando um sistema externo quebra (~5 min)
+## 6. Quando um sistema externo quebra (~5 min)
 
 ```bash
 # gateway lento (também dá para fazer pelo Swagger: http://localhost:8001/docs)
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 8000}'
 
-docker compose run --rm --service-ports k6 run -e VUS=50 /scripts/abertura-vendas.js
+docker compose run --rm --service-ports k6 run -e FAS=3 /scripts/estreia.js
 
 # volta ao normal
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 1200}'
@@ -162,7 +167,7 @@ E com `{"taxa_travamento": 0.2}`, requisições ficam presas **para sempre** (se
 |--------------------|------|
 | Compra demora segundos esperando outros sistemas | 00 async, 05 filas |
 | Um único processo | 02 load balancer |
-| CPF e meia-entrada furam o limite | 03 banco de dados |
+| Cambistas furam o limite por CPF | 03 banco de dados |
 | N+1 consultas, sem índices | 03 banco de dados |
 | Mapa de assentos lento a cada visita | 04 cache |
 | QR code e e-mail dentro da requisição | 05 filas |

@@ -14,7 +14,10 @@ class Base(DeclarativeBase):
     pass
 
 
-def get_db():
+# "async" de propósito, mesmo com o resto síncrono: assim o FastAPI fecha a
+# sessão sem precisar de uma thread livre. Com "def", sob carga extrema todas
+# as threads ficam esperando conexão e nenhuma consegue devolver a sua (deadlock).
+async def get_db():
     db = SessionLocal()
     try:
         yield db

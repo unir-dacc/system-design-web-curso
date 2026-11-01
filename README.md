@@ -18,19 +18,29 @@ Cada etapa é uma pasta independente. Entre nela e use o Docker Compose:
 cd 01-monolito
 
 docker compose up -d --build --wait                       # sobe a etapa
-docker compose run --rm --service-ports k6 run /scripts/abertura-vendas.js  # teste de carga
-docker compose run --rm --service-ports k6 run -e VUS=200 /scripts/abertura-vendas.js
+docker compose run --rm --service-ports k6 run /scripts/estreia.js   # teste de carga
+docker compose run --rm --service-ports k6 run -e FAS=100 /scripts/estreia.js  # mais fãs por segundo
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
 docker compose down -v                                    # derruba e apaga os dados
 ```
 
-Durante um teste, acompanhe o **painel do k6 em tempo real em http://localhost:5665**.
-Ao final, ele fica salvo em `relatorios/ultimo-teste.html` dentro da pasta da etapa.
+### O teste de carga
 
-Todo teste de carga **começa do zero**: apaga pedidos, ingressos, reservas e
-cobranças (a configuração dos simuladores é mantida). Para não apagar: `-e RESET=0`.
+Existe **um único teste**, `shared/load-tests/estreia.js`: a abertura das vendas do
+**maior filme da história**. Durante 1 minuto chegam 50 fãs por segundo (eles continuam
+chegando mesmo com o site lento, e desistem depois de 30 s), enquanto robôs cambistas
+tentam furar o limite de ingressos por CPF.
+
+- **Durante:** painel em tempo real em **http://localhost:5665**
+- **Depois:** resumo em português no terminal, salvo em `relatorios/estreia.txt`
+  (painel completo em `relatorios/ultimo-teste.html`)
+- Toda rodada começa do zero: apaga pedidos, ingressos, reservas e cobranças
+- Se nada aparecer na tela, veja `relatorios/k6.log`
+
+O resumo traz público, vendas, tempos de resposta e as metas (inclusive as regras de
+negócio). Cada `DEMO.md` mostra o resultado medido naquela etapa.
 
 Todas as etapas usam o mesmo nome de projeto (`ingressa`) e as mesmas portas.
 Antes de trocar de etapa, rode `docker compose down -v` na pasta da etapa anterior.
@@ -50,7 +60,7 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   ├── compose.externos.yml     # sistemas externos com limites fixos
 │   ├── gateway-pagamento/       # gateway simulado (lento, configurável)
 │   ├── sistema-cinema/          # sistema de assentos legado (lento, com fila)
-│   ├── load-tests/              # scripts k6
+│   ├── load-tests/estreia.js    # o teste de carga (k6)
 │   └── seed/catalogo.json       # filmes, salas e sessões
 └── 01-monolito/                 # cada etapa é completa e roda sozinha
     ├── app/

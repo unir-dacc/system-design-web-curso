@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app import clients
 from app.config import COTA_MEIA_ENTRADA_PCT, FUSO_HORARIO
 from app.db import get_db
-from app.models import Filme, Ingresso, Sessao
+from app.models import Filme, Ingresso, Pedido, Sessao
 from app.schemas import FilmeOut, MapaDeAssentosOut, ResumoSessaoOut, SessaoOut
 
 # As rotas são "def" (síncronas): o FastAPI roda cada uma numa thread de um
@@ -71,10 +71,19 @@ def resumo_de_vendas(sessao_id: int, db: Session = Depends(get_db)):
     sessao = buscar_sessao(db, sessao_id)
     vendidos = db.scalar(select(func.count(Ingresso.id)).where(Ingresso.sessao_id == sessao_id))
     meia = db.scalar(select(func.count(Ingresso.id)).where(Ingresso.sessao_id == sessao_id, Ingresso.tipo == "meia"))
+    por_cpf = (
+        select(func.count(Ingresso.id).label("quantidade"))
+        .join(Pedido)
+        .where(Ingresso.sessao_id == sessao_id)
+        .group_by(Pedido.cpf)
+        .subquery()
+    )
+    maior_compra = db.scalar(select(func.coalesce(func.max(por_cpf.c.quantidade), 0)))
     return ResumoSessaoOut(
         sessao_id=sessao_id,
         capacidade=sessao.sala.capacidade,
         ingressos_vendidos=vendidos,
         meia_vendidas=meia,
         cota_meia=sessao.sala.capacidade * COTA_MEIA_ENTRADA_PCT // 100,
+        maior_compra_por_cpf=maior_compra,
     )
