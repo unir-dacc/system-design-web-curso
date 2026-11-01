@@ -5,7 +5,8 @@
 //   - cambistas: robôs com poucos CPFs comprando sem parar, tentando furar o limite
 //
 // Os fãs continuam chegando mesmo se o site estiver lento. Quem espera mais
-// de 30 s desiste. No final, o resumo mostra o que aconteceu.
+// de 30 s desiste. No final, o resultado aparece no terminal e em
+// relatorios/estreia.html (para abrir no navegador e mostrar para a turma).
 //
 //   docker compose run --rm --service-ports k6 run /scripts/estreia.js
 //   docker compose run --rm --service-ports k6 run -e FAS=100 /scripts/estreia.js
@@ -14,13 +15,16 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { sleep } from 'k6';
 import { Counter, Gauge } from 'k6/metrics';
+import { gerarHtml } from './relatorio.js';
 
 const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
 const CINEMA = 'http://sistema-cinema:8000';
 const GATEWAY = 'http://gateway-pagamento:8000';
 
+const ETAPA = __ENV.ETAPA || 'Ingressa';
 const FAS_POR_SEGUNDO = Number(__ENV.FAS || 50);
 const ROBOS_CAMBISTAS = 20;
+const DURACAO_S = 60;
 const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
 const LIMITE_POR_CPF = 6;
 const COTA_MEIA = 160; // 40% de 400
@@ -28,11 +32,19 @@ const COTA_MEIA = 160; // 40% de 400
 // Três CPFs válidos usados por todos os robôs cambistas
 const CPFS_CAMBISTAS = ['11144477735', '52998224725', '39053344705'];
 
-const fasChegaram = new Counter('fas_chegaram');
-const viramConfirmacao = new Counter('ingressos_confirmados_para_o_fa');
+// O caminho do fã (funil)
+const fasEntraram = new Counter('fas_entraram');
+const fasViramMapa = new Counter('fas_viram_mapa');
+const fasTentaramComprar = new Counter('fas_tentaram_comprar');
+const fasCompraram = new Counter('fas_compraram');
+const desistiram = new Counter('fas_desistiram');
+const esgotado = new Counter('fas_encontraram_esgotado');
+
+// Vendas (fãs e robôs)
 const comprasConcluidas = new Counter('compras_concluidas');
-const desistiram = new Counter('desistiram');
-const esgotado = new Counter('encontraram_esgotado');
+const ingressosConfirmados = new Counter('ingressos_confirmados');
+
+// Conferidos no final
 const vendidos = new Gauge('ingressos_vendidos');
 const maiorCompraPorCpf = new Gauge('maior_compra_por_cpf');
 const maiorQtdMeia = new Gauge('maior_qtd_meia_na_sessao');
@@ -51,10 +63,10 @@ export const options = {
       maxVUs: 1500,
       stages: [
         { duration: '10s', target: FAS_POR_SEGUNDO }, // as vendas abrem
-        { duration: '50s', target: FAS_POR_SEGUNDO },
+        { duration: `${DURACAO_S - 10}s`, target: FAS_POR_SEGUNDO },
       ],
     },
-    cambistas: { executor: 'constant-vus', exec: 'cambista', vus: ROBOS_CAMBISTAS, duration: '60s' },
+    cambistas: { executor: 'constant-vus', exec: 'cambista', vus: ROBOS_CAMBISTAS, duration: `${DURACAO_S}s` },
   },
   thresholds: {
     'http_req_duration{name:mapa}': ['p(95)<2000'],
@@ -83,9 +95,13 @@ function sortear(lista, quantidade = 1) {
   return [...lista].sort(() => Math.random() - 0.5).slice(0, quantidade);
 }
 
+function souFa() {
+  return exec.scenario.name === 'fas';
+}
+
 function abrirMapa(sessao) {
   const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout: '30s', tags: { name: 'mapa' } });
-  if (r.status === 0 && exec.scenario.name === 'fas') desistiram.add(1); // só fãs desistem
+  if (r.status === 0 && souFa()) desistiram.add(1);
   if (r.status !== 200) return null;
   return r.json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
 }
@@ -99,18 +115,20 @@ function comprar(sessao, cpf, itens, cartao) {
   });
   if (r.status === 201) {
     comprasConcluidas.add(1);
-    viramConfirmacao.add(itens.length);
+    ingressosConfirmados.add(itens.length);
   }
-  if (r.status === 0 && exec.scenario.name === 'fas') desistiram.add(1); // só fãs desistem
+  if (r.status === 0 && souFa()) desistiram.add(1);
+  return r.status;
 }
 
 // --- Personagens ---
 
 export function fa() {
-  fasChegaram.add(1);
+  fasEntraram.add(1);
   const sessao = sortear(SESSOES)[0];
   const livres = abrirMapa(sessao);
   if (livres === null) return;
+  fasViramMapa.add(1);
   if (livres.length === 0) return esgotado.add(1);
 
   const quantidade = 1 + Math.floor(Math.random() * 4);
@@ -118,7 +136,8 @@ export function fa() {
     assento,
     tipo: Math.random() < 0.4 ? 'meia' : 'inteira',
   }));
-  comprar(sessao, gerarCpf(), itens, `tok_fa_${__VU}`); // ~5% dos cartões são recusados
+  fasTentaramComprar.add(1);
+  if (comprar(sessao, gerarCpf(), itens, `tok_fa_${__VU}`) === 201) fasCompraram.add(1); // ~5% dos cartões são recusados
 }
 
 export function cambista() {
@@ -171,88 +190,119 @@ export function teardown() {
   maiorQtdMeia.add(maiorMeia);
 }
 
-// --- Resumo ---
+// --- Resultado ---
 
-const DURACAO_S = 60; // duração da venda (setup e teardown não contam)
-const COMO_REINICIAR = '    Para destravar: docker compose restart ingressa';
-
-export function handleSummary(data) {
-  if (!data.setup_data) {
-    const texto = `\n  ⚠️  O Ingressa não está respondendo (provavelmente travou na rodada anterior).\n${COMO_REINICIAR}\n\n`;
-    return { stdout: texto };
-  }
-
+function calcularResultado(data) {
   const m = (nome) => (data.metrics[nome] ? data.metrics[nome].values : {});
   const n = (nome) => m(nome).count || 0;
-  const porSeg = (total) => (total / DURACAO_S).toFixed(1);
-  const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : '0%');
-  const seg = (ms) => (ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
-  const meta = (nome) => {
-    if (!data.metrics[nome] || !data.metrics[nome].thresholds) return '⚠️ ';
-    return Object.values(data.metrics[nome].thresholds).every((t) => t.ok) ? '✅' : '❌';
+  const passou = (nome) => {
+    if (!data.metrics[nome] || !data.metrics[nome].thresholds) return null;
+    return Object.values(data.metrics[nome].thresholds).every((t) => t.ok);
   };
   const espera = (nome) => {
     const v = m(`http_req_duration{name:${nome}}`);
-    return `metade em até ${seg(v.med)}, 95% em até ${seg(v['p(95)'])}, o pior ${seg(v.max)}`;
+    return { mediana: v.med, p95: v['p(95)'], pior: v.max };
   };
 
   const naoEntraram = n('dropped_iterations');
-  const entraram = n('fas_chegaram');
-  const fas = entraram + naoEntraram;
   const enviadas = n('http_reqs');
-  const falhas = m('http_req_failed').passes || 0;
-  const respondidas = enviadas - falhas;
-  const compras = n('compras_concluidas');
+  const comErro = m('http_req_failed').passes || 0;
+  const travou = Boolean(m('ingressa_nao_respondeu').value);
 
-  const regras = m('ingressa_nao_respondeu').value
-    ? `  ⚠️  Não deu para conferir as regras: o Ingressa TRAVOU e não respondeu
-      nem depois que o público foi embora.
-  ${COMO_REINICIAR}`
-    : `  ${meta('maior_compra_por_cpf')} No máximo ${LIMITE_POR_CPF} ingressos por CPF ................ maior compra: ${m('maior_compra_por_cpf').value}
-  ${meta('maior_qtd_meia_na_sessao')} No máximo ${COTA_MEIA} meias por sessão (40%) ........ maior venda: ${m('maior_qtd_meia_na_sessao').value}`;
+  return {
+    etapa: ETAPA,
+    fasPorSegundo: FAS_POR_SEGUNDO,
+    robos: ROBOS_CAMBISTAS,
+    duracaoS: DURACAO_S,
+    lugares: SESSOES.length * 400,
+    travou,
+    funil: {
+      chegaram: n('fas_entraram') + naoEntraram,
+      entraram: n('fas_entraram'),
+      viramMapa: n('fas_viram_mapa'),
+      tentaramComprar: n('fas_tentaram_comprar'),
+      compraram: n('fas_compraram'),
+    },
+    desistiram: n('fas_desistiram'),
+    esgotado: n('fas_encontraram_esgotado'),
+    picoSimultaneos: m('vus').max || 0,
+    enviadas,
+    respondidas: enviadas - comErro,
+    comErro,
+    compras: n('compras_concluidas'),
+    vendidos: m('ingressos_vendidos').value || 0,
+    confirmados: n('ingressos_confirmados'),
+    espera: { mapa: espera('mapa'), compra: espera('compra') },
+    metas: [
+      { texto: '95% dos fãs abrem o mapa em até 2 s', ok: passou('http_req_duration{name:mapa}') },
+      { texto: '95% dos fãs concluem a compra em até 3 s', ok: passou('http_req_duration{name:compra}') },
+      { texto: 'Menos de 1% de requisições com erro', ok: passou('http_req_failed') },
+      {
+        texto: `No máximo ${LIMITE_POR_CPF} ingressos por CPF`,
+        ok: travou ? null : passou('maior_compra_por_cpf'),
+        detalhe: travou ? 'não conferido' : `maior compra: ${m('maior_compra_por_cpf').value}`,
+      },
+      {
+        texto: `No máximo ${COTA_MEIA} meias-entradas por sessão`,
+        ok: travou ? null : passou('maior_qtd_meia_na_sessao'),
+        detalhe: travou ? 'não conferido' : `maior venda: ${m('maior_qtd_meia_na_sessao').value}`,
+      },
+    ],
+  };
+}
 
-  const texto = `
+function gerarTexto(r) {
+  const porSeg = (total) => (total / r.duracaoS).toFixed(1);
+  const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : '0%');
+  const seg = (ms) => (ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
+  const espera = (e) => `metade em até ${seg(e.mediana)}, 95% em até ${seg(e.p95)}, o pior ${seg(e.pior)}`;
+  const icone = (ok) => (ok === null ? '⚠️ ' : ok ? '✅' : '❌');
+  const f = r.funil;
+
+  return `
 ════════════════════════════════════════════════════════════════════
-  ESTREIA DO MAIOR FILME DA HISTÓRIA: 1 minuto de vendas
+  ESTREIA DO MAIOR FILME DA HISTÓRIA · ${r.etapa}
+  ${r.fasPorSegundo} fãs chegando por segundo + ${r.robos} robôs cambistas, por 1 minuto
 ════════════════════════════════════════════════════════════════════
 
-  1. A CARGA (o que o teste mandou para o Ingressa)
+  O CAMINHO DO FÃ
+    Chegaram ........................ ${f.chegaram}
+    Conseguiram entrar no site ...... ${f.entraram}  (${pct(f.entraram, f.chegaram)})
+    Viram o mapa de assentos ........ ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
+    Tentaram comprar ................ ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
+    Compraram ....................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
+    Desistiram depois de 30 s ....... ${r.desistiram}
 
-  Fãs que chegaram ............................ ${fas}
-     ${FAS_POR_SEGUNDO} novos por segundo, mais ${ROBOS_CAMBISTAS} robôs cambistas comprando sem parar
-  Pico de usuários ao mesmo tempo ............. ${m('vus').max || 0}
-     fãs e robôs esperando uma resposta no mesmo instante
-  Requisições enviadas ........................ ${enviadas}  (${porSeg(enviadas)} por segundo)
-     até 2 por fã (abrir o mapa e comprar), mais as dos robôs
+  O SISTEMA
+    Pico de usuários ao mesmo tempo . ${r.picoSimultaneos}
+    Requisições por segundo ......... ${porSeg(r.respondidas)} respondidas de ${porSeg(r.enviadas)} enviadas
+    Compras por segundo ............. ${porSeg(r.compras)}
+    Ingressos vendidos .............. ${r.vendidos} de ${r.lugares}  (confirmados para o cliente: ${r.confirmados})
 
-  2. O QUE O INGRESSA CONSEGUIU ATENDER
+  A ESPERA
+    Abrir o mapa .... ${espera(r.espera.mapa)}
+    Comprar ......... ${espera(r.espera.compra)}
 
-  Requisições respondidas ..................... ${respondidas}  (${porSeg(respondidas)} por segundo)
-     é a VAZÃO real do sistema; as outras ${falhas} ficaram sem resposta ou deram erro
-  Compras concluídas .......................... ${compras}  (${porSeg(compras)} por segundo)
-  Ingressos vendidos .......................... ${m('ingressos_vendidos').value || 0} de ${SESSOES.length * 400}
-     contados no sistema do cinema, que é o dono dos assentos
-  ...e o fã recebeu a confirmação ............. ${n('ingressos_confirmados_para_o_fa')}
-     se for menor que o número acima, houve venda para quem já tinha desistido
-
-  3. O QUE O FÃ SENTIU
-
-  Abrir o mapa de assentos .... ${espera('mapa')}
-  Concluir a compra ........... ${espera('compra')}
-  Desistiram (esperaram 30 s) ................. ${n('desistiram')}  (${pct(n('desistiram'), entraram)} dos que entraram)
-  Nem conseguiram entrar ...................... ${naoEntraram}  (${pct(naoEntraram, fas)} dos fãs)
-     o site não respondeu nem para começar a carregar
-  Encontraram a sessão esgotada ............... ${n('encontraram_esgotado')}
-
-  4. METAS
-
-  ${meta('http_req_duration{name:mapa}')} 95% dos fãs abrem o mapa em até 2 s
-  ${meta('http_req_duration{name:compra}')} 95% dos fãs concluem a compra em até 3 s
-  ${meta('http_req_failed')} Menos de 1% de requisições com erro ......... ${pct(falhas, enviadas)} com erro
-     409 (assento ocupado), 402 (cartão recusado) e 422 (regra) não são
-     erros: são respostas corretas do sistema
-${regras}
+  METAS
+${r.metas.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
+${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
+  Relatório para projetar: relatorios/estreia.html
 ════════════════════════════════════════════════════════════════════
 `;
-  return { stdout: texto, '/relatorios/estreia.txt': texto };
+}
+
+export function handleSummary(data) {
+  if (!data.setup_data) {
+    return {
+      stdout:
+        '\n  ⚠️  O Ingressa não está respondendo (provavelmente travou na rodada anterior).\n' +
+        '     Para destravar: docker compose restart ingressa\n\n',
+    };
+  }
+  const resultado = calcularResultado(data);
+  return {
+    stdout: gerarTexto(resultado),
+    '/relatorios/estreia.txt': gerarTexto(resultado),
+    '/relatorios/estreia.html': gerarHtml(resultado),
+  };
 }

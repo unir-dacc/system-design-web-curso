@@ -64,6 +64,7 @@ services:
       - ./relatorios:/relatorios
     environment:
       BASE_URL: http://ingressa:8000
+      ETAPA: "Etapa 01 · Monolito"
       # Ao final, o painel é salvo em relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD: "true"

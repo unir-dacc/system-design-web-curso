@@ -32,8 +32,9 @@ Existe **um único teste**: `estreia.js`, a abertura das vendas do maior filme d
 Fãs chegando aos montes e robôs cambistas, tudo ao mesmo tempo, por 1 minuto.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**.
-- **Depois:** o resumo aparece no terminal e fica salvo em `relatorios/estreia.txt`.
-  O painel completo fica em `relatorios/ultimo-teste.html`.
+- **Depois:** abra **`relatorios/estreia.html`** no navegador e projete para a turma
+  (`xdg-open relatorios/estreia.html`). Um resumo também aparece no terminal.
+  Gráficos ao longo do minuto: `relatorios/ultimo-teste.html`.
 - **Cada rodada começa do zero** (a configuração dos simuladores é mantida).
 - Se nada aparecer na tela, veja `relatorios/k6.log`.
 
@@ -98,14 +99,15 @@ Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel
 docker compose run --rm --service-ports k6 run /scripts/estreia.js
 ```
 
-Leia o resumo com a turma, bloco por bloco:
+Abra `relatorios/estreia.html` e leia com a turma, bloco por bloco:
 
 | Bloco | Perguntas |
 |-------|-----------|
-| 1. A carga | Quantos fãs apareceram? Quantos estavam esperando ao mesmo tempo? |
-| 2. O que o Ingressa conseguiu atender | Compare as requisições enviadas com as respondidas. Compare os ingressos vendidos com os que o fã viu confirmados: o que aconteceu com a diferença? |
-| 3. O que o fã sentiu | Quanto tempo o fã esperou? Quantos desistiram? Quantos nem conseguiram entrar? |
-| 4. Metas | Quais passaram? |
+| Topo | Quantos fãs conseguiram comprar? Apareceu algum alerta? |
+| O sistema | Compare as requisições enviadas com as respondidas. Quantos usuários esperavam ao mesmo tempo? |
+| O caminho do fã | Em qual etapa o público se perdeu? |
+| A espera | Quanto tempo o fã esperou? |
+| Metas | Quais passaram? |
 
 👉 **Observe também:** no `docker compose stats`, CPU e memória do Ingressa durante o teste.
 Depois que o teste acaba, o Ingressa ainda responde?

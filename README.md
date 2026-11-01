@@ -34,8 +34,8 @@ chegando mesmo com o site lento, e desistem depois de 30 s), enquanto robôs cam
 tentam furar o limite de ingressos por CPF.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**
-- **Depois:** resumo em português no terminal, salvo em `relatorios/estreia.txt`
-  (painel completo em `relatorios/ultimo-teste.html`)
+- **Depois:** relatório visual em **`relatorios/estreia.html`**, para abrir no navegador e
+  projetar (um resumo também aparece no terminal e em `relatorios/estreia.txt`)
 - Toda rodada começa do zero: apaga pedidos, ingressos, reservas e cobranças
 - Se nada aparecer na tela, veja `relatorios/k6.log`
 
