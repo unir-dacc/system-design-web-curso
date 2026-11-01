@@ -1,12 +1,12 @@
 // Usuários navegando: lista de filmes -> sessões -> página da sessão -> mapa de assentos.
 // Ninguém compra; só leitura. Mostra o custo de ler sempre do banco e do sistema do cinema.
 //
-//   docker compose run --rm k6 run /scripts/navegacao.js
-//   docker compose run --rm k6 run -e VUS=100 /scripts/navegacao.js
+//   docker compose run --rm --service-ports k6 run /scripts/navegacao.js
+//   docker compose run --rm --service-ports k6 run -e VUS=100 /scripts/navegacao.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL } from './lib/ingressa.js';
+import { BASE_URL, resetarTudo } from './lib/ingressa.js';
 
 const VUS = Number(__ENV.VUS || 50);
 
@@ -21,6 +21,10 @@ export const options = {
     http_req_failed: ['rate<0.01'],
   },
 };
+
+export function setup() {
+  resetarTudo();
+}
 
 export default function () {
   const filmeId = 1 + Math.floor(Math.random() * 3);

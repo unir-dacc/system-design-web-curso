@@ -50,14 +50,25 @@ services:
           memory: 512M
 
   # Gerador de carga. Não sobe com "up"; é usado com:
-  #   docker compose run --rm k6 run /scripts/abertura-vendas.js
+  #   docker compose run --rm --service-ports k6 run /scripts/abertura-vendas.js
+  # Painel em tempo real: http://localhost:5665 (o --service-ports publica a porta)
   k6:
     image: grafana/k6:0.54.0
     profiles: ["carga"]
+    # Roda com o seu usuário para conseguir salvar o relatório em ./relatorios
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      - "127.0.0.1:5665:5665"
     volumes:
       - ../shared/load-tests:/scripts:ro
+      - ./relatorios:/relatorios
     environment:
       BASE_URL: http://ingressa:8000
+      # Ao final, o painel é salvo em relatorios/ultimo-teste.html
+      K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html
+      K6_WEB_DASHBOARD: "true"
+      K6_WEB_DASHBOARD_HOST: 0.0.0.0
+      K6_WEB_DASHBOARD_PERIOD: 2s
     deploy:
       resources:
         limits:

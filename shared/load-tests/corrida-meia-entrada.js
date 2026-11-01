@@ -4,10 +4,10 @@
 //
 // Esperado: 38 meias confirmadas e 22 recusadas pela regra (422).
 //
-//   docker compose run --rm k6 run /scripts/corrida-meia-entrada.js
+//   docker compose run --rm --service-ports k6 run /scripts/corrida-meia-entrada.js
 
 import { Counter } from 'k6/metrics';
-import { comprar, gerarCpf, resumo } from './lib/ingressa.js';
+import { comprar, gerarCpf, resetarTudo, resumo } from './lib/ingressa.js';
 
 const SESSAO = 4;
 const TENTATIVAS = 60;
@@ -25,6 +25,10 @@ export const options = {
     meias_confirmadas: ['count<=38'],
   },
 };
+
+export function setup() {
+  resetarTudo();
+}
 
 export default function () {
   const indice = __VU - 1;

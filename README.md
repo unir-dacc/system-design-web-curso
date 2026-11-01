@@ -18,13 +18,19 @@ Cada etapa é uma pasta independente. Entre nela e use o Docker Compose:
 cd 01-monolito
 
 docker compose up -d --build --wait                       # sobe a etapa
-docker compose run --rm k6 run /scripts/abertura-vendas.js  # teste de carga
-docker compose run --rm k6 run -e VUS=200 /scripts/abertura-vendas.js
+docker compose run --rm --service-ports k6 run /scripts/abertura-vendas.js  # teste de carga
+docker compose run --rm --service-ports k6 run -e VUS=200 /scripts/abertura-vendas.js
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
 docker compose down -v                                    # derruba e apaga os dados
 ```
+
+Durante um teste, acompanhe o **painel do k6 em tempo real em http://localhost:5665**.
+Ao final, ele fica salvo em `relatorios/ultimo-teste.html` dentro da pasta da etapa.
+
+Todo teste de carga **começa do zero**: apaga pedidos, ingressos, reservas e
+cobranças (a configuração dos simuladores é mantida). Para não apagar: `-e RESET=0`.
 
 Todas as etapas usam o mesmo nome de projeto (`ingressa`) e as mesmas portas.
 Antes de trocar de etapa, rode `docker compose down -v` na pasta da etapa anterior.
@@ -59,7 +65,7 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 1. **Sistemas externos são idênticos em todas as etapas** (vêm de `shared/compose.externos.yml`).
    Comportamento controlado por configuração, não por hardware.
 2. **Cada etapa declara o orçamento do Ingressa** no topo do seu compose.
-3. **Cada medição começa do zero**: `docker compose down -v` antes do `up` (banco e simuladores limpos).
+3. **Cada medição começa do zero**: os testes de carga limpam o estado antes de rodar.
 4. **O gerador de carga (k6) roda com 2 CPUs fixas**, num container separado do sistema testado.
 
 | Componente | CPU | Memória | Observação |
@@ -107,3 +113,4 @@ Cartões de teste: `tok_aprovado` (sempre aprova), `tok_recusado` (sempre recusa
 | Gateway de pagamento | http://localhost:8001/docs |
 | Sistema do cinema | http://localhost:8002/docs |
 | E-mails (Mailpit) | http://localhost:8025 |
+| Painel do k6 (durante um teste) | http://localhost:5665 |

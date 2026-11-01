@@ -26,6 +26,14 @@ docker compose up -d --build --wait
 
 Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-mails) e um terminal com `docker compose stats`.
 
+### Sobre os testes de carga
+
+- **Painel em tempo real:** enquanto um teste roda, abra **http://localhost:5665**. Ele só existe durante o teste.
+- **Relatório:** ao final, o painel completo fica salvo em `relatorios/ultimo-teste.html` (abra no navegador).
+  Testes muito curtos, como as corridas, não geram relatório: veja o resultado no terminal.
+- **Cada teste começa do zero:** pedidos, ingressos, reservas e cobranças são apagados no início.
+  A configuração dos simuladores (latência, erros) é mantida. Para não apagar: `-e RESET=0`.
+
 ---
 
 ## 1. Tour pelo código (~10 min)
@@ -80,7 +88,7 @@ Mostre os erros de negócio:
 ## 4. Navegação: o custo de ler (~5 min)
 
 ```bash
-docker compose run --rm k6 run /scripts/navegacao.js
+docker compose run --rm --service-ports k6 run /scripts/navegacao.js
 ```
 
 👉 **Mostre:** consultas ao banco em **~7 ms**, mapa de assentos com p95 **~3,3 s**.
@@ -88,10 +96,11 @@ O mapa vem do cinema a cada visita, e o cinema atende 10 por vez. Motivação da
 
 ## 5. Abertura das vendas (~10 min)
 
-Num terminal deixe `docker compose stats`, em outro `watch -n1 curl -s localhost:8002/admin/estado`, e no terceiro:
+Num terminal deixe `docker compose stats`, em outro `watch -n1 curl -s localhost:8002/admin/estado`, e no terceiro
+rode o teste e abra o painel em http://localhost:5665:
 
 ```bash
-docker compose run --rm k6 run /scripts/abertura-vendas.js
+docker compose run --rm --service-ports k6 run /scripts/abertura-vendas.js
 ```
 
 Resultado esperado (100 usuários, 1 min):
@@ -102,7 +111,8 @@ Resultado esperado (100 usuários, 1 min):
 | p95 da compra | **~11 s** |
 | Erros | 0 |
 
-👉 **Mostre:** nada quebrou, mas ninguém espera 11 s para comprar um ingresso.
+👉 **Mostre:** no painel, o gráfico de duração das requisições subindo enquanto os usuários entram.
+Nada quebrou, mas ninguém espera 11 s para comprar um ingresso.
 No `docker compose stats`, a CPU do Ingressa está **baixa**: o gargalo não é o hardware, é a **espera**.
 No `/admin/estado`, veja a fila do cinema (`na_fila`).
 
@@ -113,8 +123,7 @@ Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"* (spoiler: quase na
 ### Limite de 6 ingressos por CPF
 
 ```bash
-docker compose down -v && docker compose up -d --build --wait
-docker compose run --rm k6 run /scripts/corrida-limite-cpf.js
+docker compose run --rm --service-ports k6 run /scripts/corrida-limite-cpf.js
 ```
 
 👉 **Mostre:** `✗ compras_confirmadas: 20`. Um único CPF comprou **20 ingressos** com limite de 6.
@@ -122,7 +131,7 @@ docker compose run --rm k6 run /scripts/corrida-limite-cpf.js
 ### Cota de meia-entrada (40% = 38 lugares na sala 3)
 
 ```bash
-docker compose run --rm k6 run /scripts/corrida-meia-entrada.js
+docker compose run --rm --service-ports k6 run /scripts/corrida-meia-entrada.js
 ```
 
 👉 **Mostre:** `✗ meias_confirmadas: 60` com cota de **38**. Isso é problema legal, não só técnico.
@@ -136,7 +145,7 @@ Pergunta: *"por que o teste com 1 usuário nunca pegaria isso?"*. Resolvido na a
 # gateway lento (também dá para fazer pelo Swagger: http://localhost:8001/docs)
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 8000}'
 
-docker compose run --rm k6 run -e VUS=50 /scripts/abertura-vendas.js
+docker compose run --rm --service-ports k6 run -e VUS=50 /scripts/abertura-vendas.js
 
 # volta ao normal
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 1200}'
