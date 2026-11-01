@@ -1,0 +1,42 @@
+{
+  "filmes": [
+    {
+      "id": 1,
+      "titulo": "A Última Fila",
+      "duracao_min": 128,
+      "classificacao": "12",
+      "sinopse": "Milhões de fãs tentam comprar ingresso para o último show de uma banda. Só um servidor está de pé."
+    },
+    {
+      "id": 2,
+      "titulo": "Pipoca Quântica",
+      "duracao_min": 95,
+      "classificacao": "L",
+      "sinopse": "Uma pipoca que está estourada e não estourada ao mesmo tempo, até alguém abrir o saquinho."
+    },
+    {
+      "id": 3,
+      "titulo": "O Servidor Caiu",
+      "duracao_min": 110,
+      "classificacao": "14",
+      "sinopse": "Sexta-feira, 18h, deploy em produção. O que poderia dar errado?"
+    }
+  ],
+  "cinemas": [
+    { "id": 1, "nome": "Cine Centro" },
+    { "id": 2, "nome": "Cine Shopping" }
+  ],
+  "salas": [
+    { "id": 1, "cinema_id": 1, "nome": "Sala 1 - IMAX", "fileiras": "ABCDEFGHIJKLMNOP", "assentos_por_fileira": 25 },
+    { "id": 2, "cinema_id": 1, "nome": "Sala 2", "fileiras": "ABCDEFGHIJ", "assentos_por_fileira": 15 },
+    { "id": 3, "cinema_id": 2, "nome": "Sala 3", "fileiras": "ABCDEFGH", "assentos_por_fileira": 12 }
+  ],
+  "sessoes": [
+    { "id": 1, "filme_id": 1, "sala_id": 1, "inicio": "2026-12-18T20:00:00-04:00", "preco_inteira_centavos": 6000 },
+    { "id": 2, "filme_id": 1, "sala_id": 1, "inicio": "2026-12-18T23:00:00-04:00", "preco_inteira_centavos": 6000 },
+    { "id": 3, "filme_id": 2, "sala_id": 2, "inicio": "2026-12-19T15:00:00-04:00", "preco_inteira_centavos": 3000 },
+    { "id": 4, "filme_id": 2, "sala_id": 3, "inicio": "2026-12-19T17:30:00-04:00", "preco_inteira_centavos": 3000 },
+    { "id": 5, "filme_id": 3, "sala_id": 2, "inicio": "2026-12-19T21:00:00-04:00", "preco_inteira_centavos": 3500 },
+    { "id": 6, "filme_id": 3, "sala_id": 3, "inicio": "2026-12-20T19:00:00-04:00", "preco_inteira_centavos": 3500 }
+  ]
+}

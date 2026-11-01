@@ -1,0 +1,50 @@
+# Etapa 01 - Monolito
+#
+# Orçamento de hardware do Ingressa nesta etapa:
+#   app:      1 CPU / 512 MB  (1 processo uvicorn)
+#   postgres: 1 CPU / 512 MB
+# Os sistemas externos vêm de ../shared/compose.externos.yml e são iguais em todas as etapas.
+
+name: ingressa
+
+include:
+  - ../shared/compose.externos.yml
+
+services:
+  ingressa:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ../shared/seed:/seed:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sistema-cinema:
+        condition: service_healthy
+      gateway-pagamento:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ingressa
+      POSTGRES_PASSWORD: ingressa
+      POSTGRES_DB: ingressa
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "ingressa"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M

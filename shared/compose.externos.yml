@@ -1,0 +1,52 @@
+# Sistemas EXTERNOS ao Ingressa. São incluídos por todas as etapas do curso
+# com os mesmos limites e a mesma configuração, para que a comparação entre
+# etapas seja justa: o que muda é só a arquitetura do Ingressa.
+#
+# O comportamento (latência, erros...) é simulado e configurável ao vivo:
+#   make gateway CONFIG='{"latencia_ms": 5000}'
+#   make cinema  CONFIG='{"max_concorrencia": 2}'
+
+services:
+  gateway-pagamento:
+    build: ./gateway-pagamento
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      LATENCIA_MS: 1200
+      TAXA_RECUSA: 0.05
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  sistema-cinema:
+    build: ./sistema-cinema
+    ports:
+      - "127.0.0.1:8002:8000"
+    volumes:
+      - ./seed:/seed:ro
+    environment:
+      LATENCIA_MAPA_MS: 800
+      LATENCIA_RESERVA_MS: 600
+      LATENCIA_CONFIRMACAO_MS: 400
+      MAX_CONCORRENCIA: 10
+      RESERVA_TTL_S: 600
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  # Servidor SMTP falso com interface web: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "127.0.0.1:8025:8025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
