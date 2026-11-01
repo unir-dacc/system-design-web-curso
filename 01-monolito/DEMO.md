@@ -86,7 +86,7 @@ Mostre os erros de negócio:
 | Confirmar | cinema | ~400 ms |
 | Gravar + QR code + e-mail | Ingressa | ~50 ms |
 
-👉 **Ponto-chave:** o Ingressa passa **mais de 95% do tempo esperando** outros sistemas. Guarde isso para a aula de async (00) e de filas (05).
+👉 **Ponto-chave:** o Ingressa passa **mais de 95% do tempo esperando** outros sistemas. Guarde isso para as aulas de async (02) e de filas (06).
 
 ## 4. A estreia: o pico do pico (~10 min)
 
@@ -125,7 +125,7 @@ Resultado medido (50 fãs/s + 20 robôs cambistas, 1 minuto):
 docker compose restart ingressa        # para destravar
 ```
 
-Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"* (spoiler: quase nada; aulas 00 e 02).
+Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"* (spoiler: quase nada; aulas 02 e 03).
 
 ## 5. Os bugs escondidos (~10 min)
 
@@ -142,7 +142,7 @@ docker compose run --rm --service-ports k6 run -e FAS=3 /scripts/estreia.js
 
 👉 **Mostre:** os robôs cambistas compraram **16 ingressos com o mesmo CPF**, com limite de 6.
 Volte para `app/compra.py` e leia o comentário ⚠️ do *check-then-act*.
-Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*. Resolvido na aula de **banco de dados (03)**.
+Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*. Resolvido na aula de **banco de dados (04)**.
 
 ## 6. Quando um sistema externo quebra (~5 min)
 
@@ -157,7 +157,7 @@ curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d
 ```
 
 👉 **Mostre:** um sistema que não é nosso deixa o Ingressa inteiro lento, porque cada compra segura uma das 40 threads.
-E com `{"taxa_travamento": 0.2}`, requisições ficam presas **para sempre** (sem timeout). Aula de **resiliência (07)**.
+E com `{"taxa_travamento": 0.2}`, requisições ficam presas **para sempre** (sem timeout). Aula de **resiliência (08)**.
 
 ---
 
@@ -165,11 +165,11 @@ E com `{"taxa_travamento": 0.2}`, requisições ficam presas **para sempre** (se
 
 | Problema observado | Aula |
 |--------------------|------|
-| Compra demora segundos esperando outros sistemas | 00 async, 05 filas |
-| Um único processo | 02 load balancer |
-| Cambistas furam o limite por CPF | 03 banco de dados |
-| N+1 consultas, sem índices | 03 banco de dados |
-| Mapa de assentos lento a cada visita | 04 cache |
-| QR code e e-mail dentro da requisição | 05 filas |
-| Sem timeout, reserva presa se o gateway falhar | 07 resiliência |
-| "Está lento, mas onde?" | 08 observabilidade |
+| Compra demora segundos esperando outros sistemas | 02 async, 06 filas |
+| Um único processo | 03 load balancer |
+| Cambistas furam o limite por CPF | 04 banco de dados |
+| N+1 consultas, sem índices | 04 banco de dados |
+| Mapa de assentos lento a cada visita | 05 cache |
+| QR code e e-mail dentro da requisição | 06 filas |
+| Sem timeout, reserva presa se o gateway falhar | 08 resiliência |
+| "Está lento, mas onde?" | 09 observabilidade |

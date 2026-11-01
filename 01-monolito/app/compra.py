@@ -39,7 +39,7 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     if len(set(assentos)) != len(assentos):
         raise RegraDeNegocio("O pedido tem assentos repetidos")
 
-    # ⚠️ PROPOSITAL (aula 03): "verifica e depois age" (check-then-act).
+    # ⚠️ PROPOSITAL (aula 04): "verifica e depois age" (check-then-act).
     # As duas regras abaixo leem o banco agora, mas os ingressos só são
     # gravados no final, segundos depois. Requisições simultâneas passam
     # todas pela verificação antes de qualquer uma gravar.
@@ -68,8 +68,8 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     db.commit()
 
     # 2. Cobra no gateway de pagamento (lento)
-    # ⚠️ PROPOSITAL (aula 05): o cliente fica esperando o pagamento com a requisição aberta.
-    # ⚠️ PROPOSITAL (aula 07): se o gateway falhar aqui, a reserva fica presa até expirar.
+    # ⚠️ PROPOSITAL (aula 06): o cliente fica esperando o pagamento com a requisição aberta.
+    # ⚠️ PROPOSITAL (aula 08): se o gateway falhar aqui, a reserva fica presa até expirar.
     cobranca = clients.cobrar(pedido.total_centavos, dados.cartao_token, referencia=f"pedido-{pedido.id}")
     pedido.cobranca_id = cobranca["id"]
 
@@ -97,7 +97,7 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     db.commit()
 
     # 5. Envia o e-mail com os QR codes
-    # ⚠️ PROPOSITAL (aula 05): gerar imagens e falar com o SMTP dentro da requisição.
+    # ⚠️ PROPOSITAL (aula 06): gerar imagens e falar com o SMTP dentro da requisição.
     notificacoes.enviar_confirmacao(pedido, sessao)
 
     return pedido

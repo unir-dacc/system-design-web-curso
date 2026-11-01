@@ -77,7 +77,7 @@ class Pedido(Base):
 class Ingresso(Base):
     __tablename__ = "ingressos"
 
-    # ⚠️ PROPOSITAL (aula 03): o Postgres NÃO cria índice para chave estrangeira.
+    # ⚠️ PROPOSITAL (aula 04): o Postgres NÃO cria índice para chave estrangeira.
     # Sem índice em sessao_id e pedido_id, contar ingressos de uma sessão
     # vira uma varredura da tabela inteira conforme as vendas crescem.
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -4,7 +4,7 @@ import httpx
 
 from app.config import CINEMA_URL, GATEWAY_URL
 
-# ⚠️ PROPOSITAL (aula 07): sem timeout. Se um sistema externo travar,
+# ⚠️ PROPOSITAL (aula 08): sem timeout. Se um sistema externo travar,
 # a requisição do cliente trava junto, e segura uma thread e uma conexão do banco.
 http = httpx.Client(timeout=None)
 
