@@ -20,7 +20,6 @@ cd 01-monolito
 docker compose up -d --build --wait                       # sobe a etapa
 docker compose run --rm --service-ports k6 run /scripts/estreia.js   # teste de carga
 docker compose run --rm --service-ports k6 run -e FAS=100 /scripts/estreia.js  # mais fãs por segundo
-docker compose run --rm --service-ports k6 run -e MODO=capacidade /scripts/estreia.js  # até quantos fãs aguenta?
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
@@ -30,23 +29,24 @@ docker compose down -v                                    # derruba e apaga os d
 ### O teste de carga
 
 Existe **um único teste**, `shared/load-tests/estreia.js`: a abertura das vendas do
-**maior filme da história**. Durante 1 minuto chegam 50 fãs por segundo (eles continuam
-chegando mesmo com o site lento, e desistem depois de 60 s), 5 fãs muito engajados por
-segundo (nunca desistem e tentam de novo até conseguir) e robôs cambistas tentando furar
-o limite de ingressos por CPF.
+**maior filme da história**. Uma rodada, duas partes:
+
+1. **A subida:** o público cresce em degraus (1 fã por segundo, 2, 3...). Em cada degrau
+   o teste confere se o site continua viável e descobre **até quantos fãs o Ingressa aguenta**.
+2. **O pico:** por 1 minuto chegam 50 fãs por segundo (desistem se o site não carregar
+   em 60 s; depois de clicar em comprar, esperam a resposta), 5 fãs muito engajados por
+   segundo (nunca desistem e tentam de novo até conseguir) e robôs cambistas tentando
+   furar o limite de ingressos por CPF.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**
 - **Depois:** relatório visual em **`relatorios/estreia.html`**, para abrir no navegador e
-  projetar (um resumo também aparece no terminal e em `relatorios/estreia.txt`)
+  projetar (um resumo também aparece no terminal e em `relatorios/estreia.txt`).
+  O relatório é gerado automaticamente pelo próprio teste.
 - Toda rodada começa do zero: apaga pedidos, ingressos, reservas e cobranças
 - Se nada aparecer na tela, veja `relatorios/k6.log`
 
-**Modo capacidade** (`-e MODO=capacidade`): em vez do pico, a chegada de fãs sobe em
-degraus (1 por segundo, 2, 3...) e o teste diz até quantos fãs por segundo o Ingressa
-continua viável. Resultado em `relatorios/capacidade.html`.
-
-O resumo traz a carga, o que o Ingressa conseguiu atender, o que o fã sentiu e as
-metas (inclusive as regras de negócio).
+O relatório traz a capacidade, o que aconteceu no pico (o caminho do fã, os engajados,
+a espera) e as metas, inclusive as regras de negócio.
 
 Todas as etapas usam o mesmo nome de projeto (`ingressa`) e as mesmas portas.
 Antes de trocar de etapa, rode `docker compose down -v` na pasta da etapa anterior.

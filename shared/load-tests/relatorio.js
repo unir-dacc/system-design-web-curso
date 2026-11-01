@@ -11,6 +11,12 @@ const tempo = (ms) => {
 
 function alertas(r) {
   const lista = [];
+  if (r.subida.caiuEm) {
+    lista.push(
+      `O Ingressa <b>caiu ainda na subida</b>, com ${r.subida.caiuEm.fasPorSegundo} fãs por segundo,` +
+        ' antes de o pico começar: o resultado do pico mostra um sistema que já estava fora do ar.',
+    );
+  }
   if (r.travou) {
     lista.push(
       'O Ingressa <b>travou</b> e não voltou nem depois que o público foi embora.' +
@@ -132,6 +138,14 @@ const ESTILO = `
     .degrau { grid-template-columns: 60px repeat(3, 1fr) 40px; font-size: 14px; }
     .degrau .opcional { display: none; }
   }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .dupla > div + div { border-left: 1px solid var(--linha); padding-left: 28px; }
+  .dupla .rotulo { margin-bottom: 6px; }
+  .dupla .grande { font-size: clamp(36px, 6vw, 60px); }
+  @media (max-width: 700px) {
+    .dupla { grid-template-columns: 1fr; }
+    .dupla > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: 20px; }
+  }
 </style>
 `;
 
@@ -151,10 +165,45 @@ ${corpo}
 `;
 }
 
+function vereditoCapacidade(s) {
+  if (!s.capacidade) {
+    return `<div class="grande">Inviável</div><p>Não aguentou nem ${s.degraus[0].fasPorSegundo} fã por segundo.</p>`;
+  }
+  const quebra = s.quebrou
+    ? `Com ${s.quebrou.fasPorSegundo} fãs/s, fica inviável.`
+    : 'Aguentou todos os degraus.';
+  return `<div class="grande">${s.capacidade.fasPorSegundo} fãs/s</div>
+    <p>≈ ${inteiro(s.capacidade.simultaneos)} pessoas no site ao mesmo tempo. ${quebra}</p>`;
+}
+
+function tabelaDeDegraus(s, metas) {
+  const classe = (valor, limite) => (valor === undefined ? '' : valor <= limite ? 'bom' : 'ruim');
+  const porcento = (fracao) => (fracao === undefined ? '—' : `${decimal(fracao * 100)}%`);
+  const linhas = s.degraus.map(
+    (d) => `<div class="degrau ${d.viavel ? 'viavel' : 'inviavel'}">
+      <div class="fas">${d.fasPorSegundo}/s</div>
+      <div>${d.simultaneos === undefined ? '—' : inteiro(d.simultaneos)}</div>
+      <div class="opcional">${decimal(d.comprasPorSegundo)}/s</div>
+      <div class="${classe(d.p95Mapa, metas.mapaMs)}">${tempo(d.p95Mapa)}</div>
+      <div class="${classe(d.p95Compra, metas.compraMs)}">${tempo(d.p95Compra)}</div>
+      <div class="opcional ${d.erros === undefined ? '' : d.erros < metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
+      <div class="estado">${d.viavel ? '✅' : '❌'}</div>
+    </div>`,
+  );
+  return `<div class="degrau cabecalho">
+      <div>fãs chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
+      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div></div>
+    </div>
+    ${linhas.join('')}`;
+}
+
 export function gerarHtml(r) {
-  const f = r.funil;
+  const s = r.subida;
+  const p = r.pico;
+  const f = p.funil;
   const e = r.engajados;
-  const porSeg = (total) => decimal(total / r.duracaoS);
+  const c = r.confirmados;
+  const porSeg = (total) => decimal(total / p.duracaoS);
 
   return pagina(
     `Estreia · ${r.etapa}`,
@@ -162,35 +211,47 @@ export function gerarHtml(r) {
 <header><div>
   <div class="selo">Teste de carga · ${r.etapa}</div>
   <h1>Estreia do maior filme da história</h1>
-  <p>Por 1 minuto: ${r.fasPorSegundo} fãs chegando por segundo (desistem se o site não carregar em 60 s), ${r.engajados.porSegundo} fãs muito engajados por segundo (nunca desistem) e ${r.robos} robôs cambistas</p>
+  <p>Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
+  ${p.fasPorSegundo} fãs por segundo, ${p.engajadosPorSegundo} fãs muito engajados por segundo e ${p.robos} robôs cambistas, durante 1 minuto.</p>
 </div></header>
 <main>
-  <section class="veredito">
-    <div class="grande">${pct(f.compraram, f.chegaram)}% <small>dos fãs conseguiram comprar</small></div>
-    <p>${inteiro(f.compraram)} de ${inteiro(f.chegaram)} fãs saíram com ingresso.</p>
+  <section class="veredito dupla">
+    <div>
+      <div class="rotulo">O máximo que o Ingressa aguenta</div>
+      ${vereditoCapacidade(s)}
+    </div>
+    <div>
+      <div class="rotulo">No pico</div>
+      <div class="grande">${pct(f.compraram, f.chegaram)}%</div>
+      <p>dos fãs conseguiram comprar: ${inteiro(f.compraram)} de ${inteiro(f.chegaram)}.</p>
+    </div>
   </section>
   ${alertas(r)}
 
-  <h2>O sistema</h2>
+  <h2>1 · A subida: até quantos fãs o Ingressa aguenta?</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">A chegada de fãs sobe em degraus de ${s.duracaoDegrauS} s. Em cada degrau, conferimos se o site continua viável.</p>
+  <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
+
+  <h2>2 · O pico: o sistema</h2>
   <div class="cartoes">
     ${cartao(
       'Ingressos vendidos',
       inteiro(r.vendidos),
-      `de ${inteiro(r.lugares)} lugares<br>` +
-        `fãs: ${inteiro(r.confirmados.fas)} · engajados: ${inteiro(r.confirmados.engajados)} · ` +
-        `robôs: ${inteiro(r.confirmados.cambistas)} · sem resposta até o fim: ${inteiro(r.semConfirmacao)}`,
+      `de ${inteiro(r.lugares)} lugares, na rodada inteira<br>` +
+        `subida: ${inteiro(c.subida)} · pico: ${inteiro(c.pico)} · engajados: ${inteiro(c.engajados)} · ` +
+        `robôs: ${inteiro(c.cambistas)} · sem resposta até o fim: ${inteiro(r.semConfirmacao)}`,
       pct(r.vendidos, r.lugares),
     )}
     ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'esperando uma resposta no mesmo instante')}
-    ${cartao('Requisições respondidas', `${porSeg(r.respondidas)}/s`, `de ${porSeg(r.enviadas)}/s enviadas`, pct(r.respondidas, r.enviadas))}
-    ${cartao('Compras concluídas', `${porSeg(r.compras)}/s`, `${inteiro(r.compras)} no total, contando os robôs`)}
+    ${cartao('Requisições respondidas', `${porSeg(p.respondidas)}/s`, `de ${porSeg(p.enviadas)}/s enviadas`, pct(p.respondidas, p.enviadas))}
+    ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras de fãs no pico`)}
   </div>
 
-  <h2>O caminho do fã</h2>
+  <h2>2 · O pico: o caminho do fã</h2>
   <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(r.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(r.esgotado)}</b></div>
+  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
 
-  <h2>Os fãs muito engajados</h2>
+  <h2>2 · O pico: os fãs muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
   <div class="cartoes">
     ${cartao('Conseguiram comprar', `${pct(e.compraram, e.chegaram)}%`, `${inteiro(e.compraram)} de ${inteiro(e.chegaram)} engajados`, pct(e.compraram, e.chegaram))}
@@ -199,79 +260,19 @@ export function gerarHtml(r) {
     ${cartao('Tentativas', inteiro(e.tentativas), `${e.chegaram ? decimal(e.tentativas / e.chegaram) : '0,0'} por engajado, em média`)}
   </div>
 
-  <h2>A espera</h2>
+  <h2>2 · O pico: a espera</h2>
   <div class="bloco">
-    ${espera('Abrir o mapa', r.espera.mapa, 2000)}
-    ${espera('Concluir a compra', r.espera.compra, 3000)}
+    ${espera('Abrir o mapa', p.espera.mapa, r.metas.mapaMs)}
+    ${espera('Concluir a compra', p.espera.compra, r.metas.compraMs)}
   </div>
 
-  <h2>Metas</h2>
-  <div class="metas">${metas(r.metas)}</div>
+  <h2>Metas do pico</h2>
+  <div class="metas">${metas(r.metas.lista)}</div>
 
-  <footer>Gráficos ao longo do minuto: <code>relatorios/ultimo-teste.html</code></footer>
-</main>
-`,
-  );
-}
-
-export function gerarHtmlCapacidade(r) {
-  const classe = (valor, limite) => (valor === undefined ? '' : valor <= limite ? 'bom' : 'ruim');
-  const porcento = (fracao) => (fracao === undefined ? '—' : `${decimal(fracao * 100)}%`);
-
-  let veredito;
-  if (!r.capacidade) {
-    veredito = `<div class="grande">Inviável <small>desde o primeiro degrau</small></div>
-      <p>Não aguentou nem ${r.degraus[0].fasPorSegundo} fã por segundo.</p>`;
-  } else {
-    const quebra = r.quebrou
-      ? `Com <b>${r.quebrou.fasPorSegundo} fãs por segundo</b>, o site fica inviável.`
-      : 'Aguentou todos os degraus testados: tente valores maiores com <code>-e DEGRAUS=...</code>';
-    veredito = `<div class="grande">${r.capacidade.fasPorSegundo} fãs/s <small>é o máximo que o Ingressa aguenta</small></div>
-      <p>≈ <b>${inteiro(r.capacidade.simultaneos)} pessoas</b> usando o site ao mesmo tempo. ${quebra}</p>`;
-  }
-
-  const linhas = r.degraus
-    .map(
-      (d) => `<div class="degrau ${d.viavel ? 'viavel' : 'inviavel'}">
-        <div class="fas">${d.fasPorSegundo}/s</div>
-        <div>${d.simultaneos === undefined ? '—' : inteiro(d.simultaneos)}</div>
-        <div class="opcional">${decimal(d.comprasPorSegundo)}/s</div>
-        <div class="${classe(d.p95Mapa, r.metas.mapaMs)}">${tempo(d.p95Mapa)}</div>
-        <div class="${classe(d.p95Compra, r.metas.compraMs)}">${tempo(d.p95Compra)}</div>
-        <div class="opcional ${d.erros === undefined ? '' : d.erros < r.metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
-        <div class="estado">${d.viavel ? '✅' : '❌'}</div>
-      </div>`,
-    )
-    .join('');
-
-  return pagina(
-    `Capacidade · ${r.etapa}`,
-    `
-<header><div>
-  <div class="selo">Teste de capacidade · ${r.etapa}</div>
-  <h1>Até quantos fãs o Ingressa aguenta?</h1>
-  <p>A chegada de fãs sobe em degraus de ${r.duracaoDegrauS} s. Em cada degrau, conferimos se o site continua viável.</p>
-</div></header>
-<main>
-  <section class="veredito">${veredito}</section>
-
-  <h2>Degrau a degrau</h2>
-  <div class="bloco">
-    <div class="degrau cabecalho">
-      <div>fãs chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
-      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div></div>
-    </div>
-    ${linhas}
-  </div>
-
-  <h2>O que é "viável"</h2>
-  <div class="metas">
-    <div class="meta">95% dos fãs abrem o mapa em até ${tempo(r.metas.mapaMs)}</div>
-    <div class="meta">95% dos fãs concluem a compra em até ${tempo(r.metas.compraMs)}</div>
-    <div class="meta">Menos de ${porcento(r.metas.erros)} de requisições com erro</div>
-  </div>
-
-  <footer>"Pessoas no site ao mesmo tempo" é estimado pela Lei de Little: fãs chegando por segundo × tempo médio que cada um passa no site.</footer>
+  <footer>
+    "Pessoas no site ao mesmo tempo" é estimado pela Lei de Little: fãs chegando por segundo × tempo médio que cada um passa no site.<br>
+    Gráficos ao longo da rodada: <code>relatorios/ultimo-teste.html</code>
+  </footer>
 </main>`,
   );
 }

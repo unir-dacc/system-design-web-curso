@@ -1,14 +1,19 @@
 // ESTREIA DO MAIOR FILME DA HISTÓRIA
 //
-// As vendas abrem e uma multidão tenta comprar ao mesmo tempo:
-//   - fãs: chegam aos montes, abrem o mapa e compram de 1 a 4 ingressos (alguns meia-entrada).
-//     Se esperarem mais de 60 s, desistem.
-//   - fãs muito engajados: nunca desistem. Esperam o quanto for preciso e, se algo
-//     der errado, tentam de novo até comprar ou até esgotar.
-//   - cambistas: robôs com poucos CPFs comprando sem parar, tentando furar o limite
+// Uma rodada, duas partes:
 //
-// Os fãs continuam chegando mesmo se o site estiver lento. No final, o resultado aparece no terminal e em
-// relatorios/estreia.html (para abrir no navegador e mostrar para a turma).
+//   1. A SUBIDA: antes do pico, os fãs chegam em degraus (1 por segundo, 2, 3...).
+//      Em cada degrau conferimos se o site continua viável. É assim que
+//      descobrimos até quantos fãs o Ingressa aguenta.
+//
+//   2. O PICO: as vendas abrem e, por 1 minuto, chegam ao mesmo tempo:
+//      - fãs: abrem o mapa e compram de 1 a 4 ingressos (alguns meia-entrada).
+//        Se o site não carregar em 60 s, desistem. Depois de clicar em comprar,
+//        esperam a resposta.
+//      - fãs muito engajados: nunca desistem; tentam de novo até comprar ou esgotar
+//      - cambistas: robôs com poucos CPFs comprando sem parar, tentando furar o limite
+//
+// No final: relatorios/estreia.html (para projetar) e um resumo no terminal.
 //
 //   docker compose run --rm --service-ports k6 run /scripts/estreia.js
 //   docker compose run --rm --service-ports k6 run -e FAS=100 /scripts/estreia.js
@@ -17,37 +22,48 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { sleep } from 'k6';
 import { Counter, Gauge, Trend } from 'k6/metrics';
-import { gerarHtml, gerarHtmlCapacidade } from './relatorio.js';
+import { gerarHtml } from './relatorio.js';
 
 const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
 const CINEMA = 'http://sistema-cinema:8000';
 const GATEWAY = 'http://gateway-pagamento:8000';
-
 const ETAPA = __ENV.ETAPA || 'Ingressa';
-const FAS_POR_SEGUNDO = Number(__ENV.FAS || 50);
-const ENGAJADOS_POR_SEGUNDO = Math.max(1, Math.round(FAS_POR_SEGUNDO / 10));
-const PACIENCIA = '60s'; // quanto o fã comum espera o site carregar antes de desistir
-const ROBOS_CAMBISTAS = 20;
-const DURACAO_S = 60;
-const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
-const LIMITE_POR_CPF = 6;
-const COTA_MEIA = 160; // 40% de 400
 
-// O que é um site "viável": as metas valem para a estreia e para o modo capacidade
+// O pico
+const FAS_NO_PICO = Number(__ENV.FAS || 50);
+
+// A subida: degraus sempre abaixo do pico
+const DEGRAUS = (__ENV.DEGRAUS || '1,2,3,4,6,8,12,16,24,32')
+  .split(',')
+  .map(Number)
+  .filter((d) => d < FAS_NO_PICO);
+if (DEGRAUS.length === 0) throw new Error('O pico precisa de pelo menos 2 fãs por segundo (-e FAS=2)');
+const DURACAO_DEGRAU_S = 15;
+const SUBIDA_S = DEGRAUS.length * DURACAO_DEGRAU_S;
+
+const ENGAJADOS_POR_SEGUNDO = Math.max(1, Math.round(FAS_NO_PICO / 10));
+const ROBOS_CAMBISTAS = 20;
+const PICO_S = 60;
+
+// O fã comum espera o site carregar por no máximo isso; depois de clicar em
+// comprar, todo mundo espera a resposta.
+const PACIENCIA = '60s';
+const ESPERA_DA_COMPRA = '10m';
+
+// O que é um site "viável"
 const META_MAPA_MS = 2000;
 const META_COMPRA_MS = 3000;
 const META_ERROS = 0.01;
 
-// MODO=capacidade: em vez do pico, só fãs comuns chegando em degraus
-// (1/s, 2/s, 3/s...) para descobrir até onde o Ingressa continua viável.
-const MODO = __ENV.MODO || 'estreia';
-const DEGRAUS = (__ENV.DEGRAUS || '1,2,3,4,6,8,12,16,24,32').split(',').map(Number);
-const DURACAO_DEGRAU_S = 15;
-
-// Três CPFs válidos usados por todos os robôs cambistas
+// Regras de negócio
+const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
+const LIMITE_POR_CPF = 6;
+const COTA_MEIA = 160; // 40% de 400
 const CPFS_CAMBISTAS = ['11144477735', '52998224725', '39053344705'];
 
-// O caminho do fã (funil)
+// --- Métricas ---
+
+// O caminho do fã (subida e pico são separados pela tag "scenario")
 const fasEntraram = new Counter('fas_entraram');
 const fasViramMapa = new Counter('fas_viram_mapa');
 const fasTentaramComprar = new Counter('fas_tentaram_comprar');
@@ -63,14 +79,9 @@ const engajadosEsgotado = new Counter('engajados_encontraram_esgotado');
 const engajadosTentativas = new Counter('engajados_tentativas');
 const engajadosTempo = new Trend('engajados_tempo_ate_comprar', true);
 
-// Vendas (fãs e robôs)
+// Compras e ingressos que o comprador viu confirmados
 const comprasConcluidas = new Counter('compras_concluidas');
-// Ingressos que o comprador viu confirmados, por tipo de comprador
-const ingressosConfirmados = {
-  fas: new Counter('ingressos_confirmados_fas'),
-  engajados: new Counter('ingressos_confirmados_engajados'),
-  cambistas: new Counter('ingressos_confirmados_cambistas'),
-};
+const ingressosConfirmados = new Counter('ingressos_confirmados');
 
 // Conferidos no final
 const vendidos = new Gauge('ingressos_vendidos');
@@ -80,73 +91,97 @@ const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
 http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422)); // erros de negócio não são falhas
 
-const CENARIO_CAPACIDADE = {
-  fas: {
+// --- Cenários ---
+
+function chegada(funcao, stages, extras = {}) {
+  return {
     executor: 'ramping-arrival-rate',
-    exec: 'fa',
+    exec: funcao,
     startRate: 0,
     timeUnit: '1s',
-    preAllocatedVUs: 100,
+    preAllocatedVUs: 50,
     maxVUs: 2500,
-    stages: DEGRAUS.flatMap((d) => [
-      { duration: '2s', target: d },
-      { duration: `${DURACAO_DEGRAU_S - 2}s`, target: d },
-    ]),
-    gracefulStop: '60s',
-  },
-};
+    stages,
+    gracefulStop: '60s', // quem chegou no fim também tem tempo de terminar
+    ...extras,
+  };
+}
 
-// Números separados por degrau só aparecem no resumo se tiverem uma meta.
-// Estas metas sempre passam: servem apenas para o k6 guardar os números.
-function metasPorDegrau() {
-  const metas = {};
-  for (const d of DEGRAUS) {
-    metas[`http_req_duration{name:mapa,degrau:${d}}`] = ['max>=0'];
-    metas[`http_req_duration{name:compra,degrau:${d}}`] = ['max>=0'];
-    metas[`http_req_failed{degrau:${d}}`] = ['rate>=0'];
-    metas[`compras_concluidas{degrau:${d}}`] = ['count>=0'];
-    metas[`fas_entraram{degrau:${d}}`] = ['count>=0'];
-    metas[`tempo_do_fa{degrau:${d}}`] = ['max>=0'];
-  }
-  return metas;
+const inicioDoPico = `${SUBIDA_S}s`;
+
+// Números separados por parte e por degrau só aparecem no resumo se tiverem uma meta.
+// As metas "sempre verdadeiras" abaixo servem apenas para o k6 guardar esses números.
+function guardar(metricas, condicao = 'count>=0') {
+  return Object.fromEntries(metricas.map((m) => [m, [condicao]]));
 }
 
 export const options = {
-  scenarios: MODO === 'capacidade' ? CENARIO_CAPACIDADE : {
-    fas: {
-      executor: 'ramping-arrival-rate',
-      exec: 'fa',
-      startRate: 0,
-      timeUnit: '1s',
-      preAllocatedVUs: 100,
-      maxVUs: 2500,
-      stages: [
-        { duration: '10s', target: FAS_POR_SEGUNDO }, // as vendas abrem
-        { duration: `${DURACAO_S - 10}s`, target: FAS_POR_SEGUNDO },
+  scenarios: {
+    subida: chegada(
+      'fa',
+      DEGRAUS.flatMap((d) => [
+        { duration: '2s', target: d },
+        { duration: `${DURACAO_DEGRAU_S - 2}s`, target: d },
+      ]),
+    ),
+    pico: chegada(
+      'fa',
+      [
+        { duration: '10s', target: FAS_NO_PICO }, // as vendas abrem
+        { duration: `${PICO_S - 10}s`, target: FAS_NO_PICO },
       ],
-      gracefulStop: '60s', // quem chegou no fim também tem 60 s de paciência
-    },
-    engajados: {
-      executor: 'ramping-arrival-rate',
-      exec: 'engajado',
-      startRate: 0,
-      timeUnit: '1s',
-      preAllocatedVUs: 20,
-      maxVUs: 1000,
-      stages: [
+      { startTime: inicioDoPico },
+    ),
+    engajados: chegada(
+      'engajado',
+      [
         { duration: '10s', target: ENGAJADOS_POR_SEGUNDO },
-        { duration: `${DURACAO_S - 10}s`, target: ENGAJADOS_POR_SEGUNDO },
+        { duration: `${PICO_S - 10}s`, target: ENGAJADOS_POR_SEGUNDO },
       ],
-      gracefulStop: '60s', // depois do minuto de vendas, ainda esperam mais 1 min antes do teste encerrar
+      { startTime: inicioDoPico, maxVUs: 1000 },
+    ),
+    cambistas: {
+      executor: 'constant-vus',
+      exec: 'cambista',
+      vus: ROBOS_CAMBISTAS,
+      duration: `${PICO_S}s`,
+      startTime: inicioDoPico,
     },
-    cambistas: { executor: 'constant-vus', exec: 'cambista', vus: ROBOS_CAMBISTAS, duration: `${DURACAO_S}s` },
   },
-  thresholds: MODO === 'capacidade' ? metasPorDegrau() : {
-    'http_req_duration{name:mapa}': [`p(95)<${META_MAPA_MS}`],
-    'http_req_duration{name:compra}': [`p(95)<${META_COMPRA_MS}`],
-    http_req_failed: [`rate<${META_ERROS}`],
+  thresholds: {
+    // Metas do pico
+    'http_req_duration{name:mapa,scenario:pico}': [`p(95)<${META_MAPA_MS}`],
+    'http_req_duration{name:compra,scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
+    'http_req_failed{scenario:pico}': [`rate<${META_ERROS}`],
     maior_compra_por_cpf: [`value<=${LIMITE_POR_CPF}`],
     maior_qtd_meia_na_sessao: [`value<=${COTA_MEIA}`],
+
+    // Só para guardar os números
+    ...guardar([
+      'fas_entraram{scenario:pico}',
+      'fas_viram_mapa{scenario:pico}',
+      'fas_tentaram_comprar{scenario:pico}',
+      'fas_compraram{scenario:pico}',
+      'fas_desistiram{scenario:pico}',
+      'fas_encontraram_esgotado{scenario:pico}',
+      'dropped_iterations{scenario:pico}',
+      'http_reqs{scenario:pico}',
+      'compras_concluidas{scenario:pico}',
+      'ingressos_confirmados{scenario:subida}',
+      'ingressos_confirmados{scenario:pico}',
+      'ingressos_confirmados{scenario:engajados}',
+      'ingressos_confirmados{scenario:cambistas}',
+      ...DEGRAUS.flatMap((d) => [`compras_concluidas{degrau:${d}}`, `fas_entraram{degrau:${d}}`]),
+    ]),
+    ...guardar(
+      DEGRAUS.flatMap((d) => [
+        `http_req_duration{name:mapa,degrau:${d}}`,
+        `http_req_duration{name:compra,degrau:${d}}`,
+        `tempo_do_fa{degrau:${d}}`,
+      ]),
+      'max>=0',
+    ),
+    ...guardar(DEGRAUS.map((d) => `http_req_failed{degrau:${d}}`), 'rate>=0'),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
   teardownTimeout: '90s',
@@ -168,28 +203,19 @@ function sortear(lista, quantidade = 1) {
   return [...lista].sort(() => Math.random() - 0.5).slice(0, quantidade);
 }
 
-function souFa() {
-  return exec.scenario.name === 'fas';
+function souFaComum() {
+  return exec.scenario.name === 'subida' || exec.scenario.name === 'pico';
 }
 
-// Quanto tempo esperar pelo mapa: o fã comum desiste depois de PACIENCIA,
-// o engajado espera "para sempre" (até o teste acabar)
-function paciencia() {
-  return exec.scenario.name === 'engajados' ? '10m' : PACIENCIA;
-}
-
-// Depois de clicar em "comprar", ninguém abandona: todos esperam a resposta
-const ESPERA_DA_COMPRA = '10m';
-
-// No modo capacidade, em qual degrau estamos agora
 function degrauAtual() {
   const segundos = (Date.now() - exec.scenario.startTime) / 1000;
   return DEGRAUS[Math.min(Math.floor(segundos / DURACAO_DEGRAU_S), DEGRAUS.length - 1)];
 }
 
 function abrirMapa(sessao, tags = {}) {
-  const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout: paciencia(), tags: { name: 'mapa', ...tags } });
-  if (r.status === 0 && souFa()) desistiram.add(1, tags);
+  const timeout = exec.scenario.name === 'engajados' ? ESPERA_DA_COMPRA : PACIENCIA;
+  const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout, tags: { name: 'mapa', ...tags } });
+  if (r.status === 0 && souFaComum()) desistiram.add(1, tags);
   if (r.status !== 200) return null;
   return r.json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
 }
@@ -203,7 +229,7 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
   });
   if (r.status === 201) {
     comprasConcluidas.add(1, tags);
-    ingressosConfirmados[exec.scenario.name].add(itens.length);
+    ingressosConfirmados.add(itens.length, tags);
   }
   return r.status;
 }
@@ -211,7 +237,7 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
 // --- Personagens ---
 
 export function fa() {
-  const tags = MODO === 'capacidade' ? { degrau: String(degrauAtual()) } : {};
+  const tags = exec.scenario.name === 'subida' ? { degrau: String(degrauAtual()) } : {};
   const inicio = Date.now();
   tentarComprar(tags);
   tempoDoFa.add(Date.now() - inicio, tags);
@@ -222,16 +248,16 @@ function tentarComprar(tags) {
   const sessao = sortear(SESSOES)[0];
   const livres = abrirMapa(sessao, tags);
   if (livres === null) return;
-  fasViramMapa.add(1);
-  if (livres.length === 0) return esgotado.add(1);
+  fasViramMapa.add(1, tags);
+  if (livres.length === 0) return esgotado.add(1, tags);
 
   const quantidade = 1 + Math.floor(Math.random() * 4);
   const itens = sortear(livres, quantidade).map((assento) => ({
     assento,
     tipo: Math.random() < 0.4 ? 'meia' : 'inteira',
   }));
-  fasTentaramComprar.add(1);
-  if (comprar(sessao, gerarCpf(), itens, `tok_fa_${__VU}`, tags) === 201) fasCompraram.add(1); // ~5% dos cartões são recusados
+  fasTentaramComprar.add(1, tags);
+  if (comprar(sessao, gerarCpf(), itens, `tok_fa_${__VU}`, tags) === 201) fasCompraram.add(1, tags); // ~5% dos cartões são recusados
 }
 
 export function engajado() {
@@ -284,9 +310,7 @@ export function setup() {
 }
 
 export function teardown() {
-  if (MODO === 'capacidade') return; // aqui só interessa o tempo de resposta
-
-  // Quem desiste vai embora, mas o servidor continua processando o pedido dele.
+  // Pedidos ainda em andamento continuam sendo processados no servidor.
   // Espera até 30 s o sistema do cinema terminar antes de conferir.
   let estado = null;
   for (let i = 0; i < 30; i++) {
@@ -318,209 +342,200 @@ export function teardown() {
 // --- Resultado ---
 
 function calcularResultado(data) {
-  const m = (nome) => (data.metrics[nome] ? data.metrics[nome].values : {});
-  const n = (nome) => m(nome).count || 0;
+  const v = (nome) => (data.metrics[nome] ? data.metrics[nome].values : {});
+  const n = (nome) => v(nome).count || 0;
   const passou = (nome) => {
     if (!data.metrics[nome] || !data.metrics[nome].thresholds) return null;
     return Object.values(data.metrics[nome].thresholds).every((t) => t.ok);
   };
-  const espera = (nome) => {
-    const v = m(`http_req_duration{name:${nome}}`);
-    return { mediana: v.med, p95: v['p(95)'], pior: v.max };
-  };
+  // Sem nenhuma resposta, o k6 informa 0 ms: tratamos como "sem medida"
+  const p95 = (nome) => v(nome)['p(95)'] || undefined;
+  const espera = (nome) => ({ mediana: v(nome).med || undefined, p95: p95(nome), pior: v(nome).max || undefined });
+  // Sem nenhuma medida, o k6 considera a meta cumprida: aqui ela aparece como "não medida"
+  const medida = (texto, nome, semDados) =>
+    p95(nome) === undefined ? { texto, ok: null, detalhe: semDados } : { texto, ok: passou(nome) };
 
-  const naoEntraram = n('dropped_iterations');
-  const enviadas = n('http_reqs');
-  const comErro = m('http_req_failed').passes || 0;
-  const travou = Boolean(m('ingressa_nao_respondeu').value);
-
-  return {
-    etapa: ETAPA,
-    fasPorSegundo: FAS_POR_SEGUNDO,
-    robos: ROBOS_CAMBISTAS,
-    duracaoS: DURACAO_S,
-    lugares: SESSOES.length * 400,
-    travou,
-    funil: {
-      chegaram: n('fas_entraram') + naoEntraram,
-      entraram: n('fas_entraram'),
-      viramMapa: n('fas_viram_mapa'),
-      tentaramComprar: n('fas_tentaram_comprar'),
-      compraram: n('fas_compraram'),
-    },
-    desistiram: n('fas_desistiram'),
-    esgotado: n('fas_encontraram_esgotado'),
-    engajados: {
-      porSegundo: ENGAJADOS_POR_SEGUNDO,
-      chegaram: n('engajados_chegaram'),
-      compraram: n('engajados_compraram'),
-      esgotado: n('engajados_encontraram_esgotado'),
-      aindaEsperando: n('engajados_chegaram') - n('engajados_compraram') - n('engajados_encontraram_esgotado'),
-      tentativas: n('engajados_tentativas'),
-      tempo: { mediana: m('engajados_tempo_ate_comprar').med, pior: m('engajados_tempo_ate_comprar').max },
-    },
-    picoSimultaneos: m('vus').max || 0,
-    enviadas,
-    respondidas: enviadas - comErro,
-    comErro,
-    compras: n('compras_concluidas'),
-    vendidos: m('ingressos_vendidos').value || 0,
-    confirmados: {
-      fas: n('ingressos_confirmados_fas'),
-      engajados: n('ingressos_confirmados_engajados'),
-      cambistas: n('ingressos_confirmados_cambistas'),
-    },
-    espera: { mapa: espera('mapa'), compra: espera('compra') },
-    metas: [
-      { texto: '95% dos fãs abrem o mapa em até 2 s', ok: passou('http_req_duration{name:mapa}') },
-      { texto: '95% dos fãs concluem a compra em até 3 s', ok: passou('http_req_duration{name:compra}') },
-      { texto: 'Menos de 1% de requisições com erro', ok: passou('http_req_failed') },
-      {
-        texto: `No máximo ${LIMITE_POR_CPF} ingressos por CPF`,
-        ok: travou ? null : passou('maior_compra_por_cpf'),
-        detalhe: travou ? 'não conferido' : `maior compra: ${m('maior_compra_por_cpf').value}`,
-      },
-      {
-        texto: `No máximo ${COTA_MEIA} meias-entradas por sessão`,
-        ok: travou ? null : passou('maior_qtd_meia_na_sessao'),
-        detalhe: travou ? 'não conferido' : `maior venda: ${m('maior_qtd_meia_na_sessao').value}`,
-      },
-    ],
-  };
-}
-
-// Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha
-// respondido quando o teste acabou
-function semConfirmacao(r) {
-  const c = r.confirmados;
-  return Math.max(0, r.vendidos - c.fas - c.engajados - c.cambistas);
-}
-
-function gerarTexto(r) {
-  const porSeg = (total) => (total / r.duracaoS).toFixed(1);
-  const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : '0%');
-  const seg = (ms) => (ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
-  const espera = (e) => `metade em até ${seg(e.mediana)}, 95% em até ${seg(e.p95)}, o pior ${seg(e.pior)}`;
-  const icone = (ok) => (ok === null ? '⚠️ ' : ok ? '✅' : '❌');
-  const f = r.funil;
-  const e = r.engajados;
-
-  return `
-════════════════════════════════════════════════════════════════════
-  ESTREIA DO MAIOR FILME DA HISTÓRIA · ${r.etapa}
-  ${r.fasPorSegundo} fãs + ${r.engajados.porSegundo} fãs engajados chegando por segundo, ${r.robos} robôs cambistas, 1 minuto
-════════════════════════════════════════════════════════════════════
-
-  O CAMINHO DO FÃ
-    Chegaram ........................ ${f.chegaram}
-    Conseguiram entrar no site ...... ${f.entraram}  (${pct(f.entraram, f.chegaram)})
-    Viram o mapa de assentos ........ ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
-    Tentaram comprar ................ ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
-    Compraram ....................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
-    Desistiram (site não carregou) .. ${r.desistiram}
-
-  OS FÃS MUITO ENGAJADOS (nunca desistem, tentam de novo até conseguir)
-    Chegaram ........................ ${e.chegaram}  (${e.porSegundo} por segundo)
-    Compraram ....................... ${e.compraram}  (${pct(e.compraram, e.chegaram)})
-    Ainda esperando no fim do teste . ${e.aindaEsperando}
-    Tempo até comprar ............... metade em até ${seg(e.tempo.mediana)}, o pior ${seg(e.tempo.pior)}
-    Tentativas no total ............. ${e.tentativas}
-
-  O SISTEMA
-    Pico de usuários ao mesmo tempo . ${r.picoSimultaneos}
-    Requisições por segundo ......... ${porSeg(r.respondidas)} respondidas de ${porSeg(r.enviadas)} enviadas
-    Compras por segundo ............. ${porSeg(r.compras)}
-    Ingressos vendidos .............. ${r.vendidos} de ${r.lugares}, e para quem foram:
-       fãs (viram a confirmação) .... ${r.confirmados.fas}
-       fãs engajados ................ ${r.confirmados.engajados}
-       robôs cambistas .............. ${r.confirmados.cambistas}
-       sem resposta até o fim ....... ${r.semConfirmacao}${r.semConfirmacao ? "  ⚠️ o fã ainda esperava a confirmação" : ""}
-
-  A ESPERA
-    Abrir o mapa .... ${espera(r.espera.mapa)}
-    Comprar ......... ${espera(r.espera.compra)}
-
-  METAS
-${r.metas.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
-${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
-  Relatório para projetar: relatorios/estreia.html
-════════════════════════════════════════════════════════════════════
-`;
-}
-
-// --- Resultado do modo capacidade ---
-
-function calcularCapacidade(data) {
-  const v = (nome) => (data.metrics[nome] ? data.metrics[nome].values : {});
+  // 1. A subida
   const degraus = DEGRAUS.map((d) => {
-    // Sem nenhuma resposta no degrau, o k6 informa 0: tratamos como "sem medida"
-    const p95Mapa = v(`http_req_duration{name:mapa,degrau:${d}}`)['p(95)'] || undefined;
-    const p95Compra = v(`http_req_duration{name:compra,degrau:${d}}`)['p(95)'] || undefined;
+    const p95Mapa = p95(`http_req_duration{name:mapa,degrau:${d}}`);
+    const p95Compra = p95(`http_req_duration{name:compra,degrau:${d}}`);
     const erros = v(`http_req_failed{degrau:${d}}`).rate;
     const tempoMedio = v(`tempo_do_fa{degrau:${d}}`).avg;
     return {
       fasPorSegundo: d,
-      comprasPorSegundo: (v(`compras_concluidas{degrau:${d}}`).count || 0) / DURACAO_DEGRAU_S,
+      comprasPorSegundo: n(`compras_concluidas{degrau:${d}}`) / DURACAO_DEGRAU_S,
       p95Mapa,
       p95Compra,
       erros,
       // Lei de Little: pessoas no site ao mesmo tempo = chegada por segundo × tempo que cada uma fica
-      simultaneos: tempoMedio === undefined ? undefined : Math.round((d * tempoMedio) / 1000),
+      simultaneos: tempoMedio ? Math.round((d * tempoMedio) / 1000) : undefined,
       viavel:
         p95Mapa !== undefined && p95Mapa <= META_MAPA_MS &&
         p95Compra !== undefined && p95Compra <= META_COMPRA_MS &&
         erros !== undefined && erros < META_ERROS,
     };
   });
+  // Capacidade = o maior degrau viável (um degrau azarado no meio não derruba o resultado)
+  const viaveis = degraus.filter((d) => d.viavel);
+  const capacidade = viaveis.length ? viaveis[viaveis.length - 1] : null;
+  const quebrou = degraus.find((d) => !d.viavel && (!capacidade || d.fasPorSegundo > capacidade.fasPorSegundo)) || null;
 
-  const primeiroInviavel = degraus.findIndex((d) => !d.viavel);
-  const ultimoViavel = primeiroInviavel === -1 ? degraus[degraus.length - 1] : degraus[primeiroInviavel - 1];
+  // 2. O pico
+  const enviadas = n('http_reqs{scenario:pico}');
+  const comErro = v('http_req_failed{scenario:pico}').passes || 0;
+  const naoEntraram = n('dropped_iterations{scenario:pico}');
+  const travou = Boolean(v('ingressa_nao_respondeu').value);
+  const confirmados = {
+    subida: n('ingressos_confirmados{scenario:subida}'),
+    pico: n('ingressos_confirmados{scenario:pico}'),
+    engajados: n('ingressos_confirmados{scenario:engajados}'),
+    cambistas: n('ingressos_confirmados{scenario:cambistas}'),
+  };
+  const totalVendidos = v('ingressos_vendidos').value || 0;
+  const totalConfirmados = confirmados.subida + confirmados.pico + confirmados.engajados + confirmados.cambistas;
+
   return {
     etapa: ETAPA,
-    degraus,
-    duracaoDegrauS: DURACAO_DEGRAU_S,
-    capacidade: ultimoViavel || null,
-    quebrou: primeiroInviavel === -1 ? null : degraus[primeiroInviavel],
-    metas: { mapaMs: META_MAPA_MS, compraMs: META_COMPRA_MS, erros: META_ERROS },
+    lugares: SESSOES.length * 400,
+    travou,
+    subida: {
+      degraus,
+      duracaoDegrauS: DURACAO_DEGRAU_S,
+      capacidade,
+      quebrou,
+      // Metade ou mais das requisições falhando: o Ingressa caiu ainda na subida
+      caiuEm: degraus.find((d) => d.erros !== undefined && d.erros >= 0.5) || null,
+    },
+    pico: {
+      fasPorSegundo: FAS_NO_PICO,
+      engajadosPorSegundo: ENGAJADOS_POR_SEGUNDO,
+      robos: ROBOS_CAMBISTAS,
+      duracaoS: PICO_S,
+      funil: {
+        chegaram: n('fas_entraram{scenario:pico}') + naoEntraram,
+        entraram: n('fas_entraram{scenario:pico}'),
+        viramMapa: n('fas_viram_mapa{scenario:pico}'),
+        tentaramComprar: n('fas_tentaram_comprar{scenario:pico}'),
+        compraram: n('fas_compraram{scenario:pico}'),
+      },
+      desistiram: n('fas_desistiram{scenario:pico}'),
+      esgotado: n('fas_encontraram_esgotado{scenario:pico}'),
+      enviadas,
+      respondidas: enviadas - comErro,
+      compras: n('compras_concluidas{scenario:pico}'),
+      espera: {
+        mapa: espera('http_req_duration{name:mapa,scenario:pico}'),
+        compra: espera('http_req_duration{name:compra,scenario:pico}'),
+      },
+    },
+    engajados: {
+      chegaram: n('engajados_chegaram'),
+      compraram: n('engajados_compraram'),
+      aindaEsperando: n('engajados_chegaram') - n('engajados_compraram') - n('engajados_encontraram_esgotado'),
+      tentativas: n('engajados_tentativas'),
+      tempo: { mediana: v('engajados_tempo_ate_comprar').med, pior: v('engajados_tempo_ate_comprar').max },
+    },
+    picoSimultaneos: v('vus').max || 0,
+    vendidos: totalVendidos,
+    confirmados,
+    // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
+    semConfirmacao: Math.max(0, totalVendidos - totalConfirmados),
+    metas: {
+      mapaMs: META_MAPA_MS,
+      compraMs: META_COMPRA_MS,
+      erros: META_ERROS,
+      lista: [
+        medida(`95% dos fãs abrem o mapa em até ${META_MAPA_MS / 1000} s`, 'http_req_duration{name:mapa,scenario:pico}', 'nenhum mapa chegou a abrir'),
+        medida(`95% dos fãs concluem a compra em até ${META_COMPRA_MS / 1000} s`, 'http_req_duration{name:compra,scenario:pico}', 'ninguém chegou a comprar'),
+        { texto: 'Menos de 1% de requisições com erro', ok: passou('http_req_failed{scenario:pico}') },
+        {
+          texto: `No máximo ${LIMITE_POR_CPF} ingressos por CPF`,
+          ok: travou ? null : passou('maior_compra_por_cpf'),
+          detalhe: travou ? 'não conferido' : `maior compra: ${v('maior_compra_por_cpf').value}`,
+        },
+        {
+          texto: `No máximo ${COTA_MEIA} meias-entradas por sessão`,
+          ok: travou ? null : passou('maior_qtd_meia_na_sessao'),
+          detalhe: travou ? 'não conferido' : `maior venda: ${v('maior_qtd_meia_na_sessao').value}`,
+        },
+      ],
+    },
   };
 }
 
-function gerarTextoCapacidade(r) {
+function gerarTexto(r) {
   const seg = (ms) => (ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
-  const pct = (x) => (x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);
+  const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : '0%');
+  const pctFracao = (x) => (x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);
   const col = (texto, largura) => String(texto).padStart(largura);
+  const icone = (ok) => (ok === null ? '⚠️ ' : ok ? '✅' : '❌');
+  const s = r.subida;
+  const p = r.pico;
+  const f = p.funil;
+  const e = r.engajados;
+  const porSeg = (total) => (total / p.duracaoS).toFixed(1);
 
-  let veredito;
-  if (!r.capacidade) veredito = `Não aguentou nem ${r.degraus[0].fasPorSegundo} fã por segundo.`;
-  else if (!r.quebrou) veredito = `Aguentou todos os degraus. Tente mais: -e DEGRAUS=...`;
+  let capacidade;
+  if (!s.capacidade) capacidade = `Não aguentou nem ${s.degraus[0].fasPorSegundo} fã por segundo.`;
+  else if (!s.quebrou) capacidade = `Aguentou todos os degraus (até ${s.capacidade.fasPorSegundo} fãs/s).`;
   else {
-    veredito =
-      `Aguenta até ${r.capacidade.fasPorSegundo} fãs por segundo (≈ ${r.capacidade.simultaneos} pessoas no site ao mesmo tempo).\n` +
-      `  Com ${r.quebrou.fasPorSegundo} fãs por segundo, fica inviável.`;
+    capacidade =
+      `Aguenta até ${s.capacidade.fasPorSegundo} fãs por segundo (≈ ${s.capacidade.simultaneos} pessoas no site ao mesmo tempo).\n` +
+      `    Com ${s.quebrou.fasPorSegundo} fãs por segundo, fica inviável.`;
   }
 
-  const linhas = r.degraus.map(
+  const degraus = s.degraus.map(
     (d) =>
-      `  ${col(d.fasPorSegundo, 6)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
+      `    ${col(d.fasPorSegundo, 5)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
       `${col(d.comprasPorSegundo.toFixed(1), 11)}${col(seg(d.p95Mapa), 11)}${col(seg(d.p95Compra), 12)}` +
-      `${col(pct(d.erros), 9)}    ${d.viavel ? '✅' : '❌'}`,
+      `${col(pctFracao(d.erros), 9)}    ${d.viavel ? '✅' : '❌'}`,
   );
 
   return `
 ════════════════════════════════════════════════════════════════════
-  CAPACIDADE · ${r.etapa}
-  Até quantos fãs o Ingressa aguenta?
+  ESTREIA DO MAIOR FILME DA HISTÓRIA · ${r.etapa}
 ════════════════════════════════════════════════════════════════════
 
-  ${veredito}
+  1. A SUBIDA: até quantos fãs o Ingressa aguenta?
 
-  fãs/s  no site junto  compras/s  95% mapa  95% compra   erros   viável?
-${linhas.join('\n')}
+    ${capacidade}
 
-  Viável = 95% abrem o mapa em até ${seg(r.metas.mapaMs)}, 95% compram em até ${seg(r.metas.compraMs)}
-           e menos de ${pct(r.metas.erros)} de erros. Cada degrau dura ${r.duracaoDegrauS} s.
+    fãs/s  no site junto  compras/s  95% mapa  95% compra   erros   viável?
+${degraus.join('\n')}
 
-  Relatório para projetar: relatorios/capacidade.html
+  2. O PICO: ${p.fasPorSegundo} fãs/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
+
+    Fãs que conseguiram comprar ..... ${f.compraram} de ${f.chegaram}  (${pct(f.compraram, f.chegaram)})
+
+    O caminho do fã
+      Chegaram ...................... ${f.chegaram}
+      Conseguiram entrar no site .... ${f.entraram}  (${pct(f.entraram, f.chegaram)})
+      Viram o mapa de assentos ...... ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
+      Tentaram comprar .............. ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
+      Compraram ..................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
+      Desistiram (site não carregou)  ${p.desistiram}
+
+    Os fãs muito engajados (nunca desistem)
+      Compraram ..................... ${e.compraram} de ${e.chegaram}  (${pct(e.compraram, e.chegaram)})
+      Ainda esperando no fim ........ ${e.aindaEsperando}
+      Tempo até comprar ............. metade em até ${seg(e.tempo.mediana)}, o pior ${seg(e.tempo.pior)}
+
+    O sistema
+      Pico de usuários ao mesmo tempo ${r.picoSimultaneos}
+      Requisições por segundo ....... ${porSeg(p.respondidas)} respondidas de ${porSeg(p.enviadas)} enviadas
+      Compras por segundo ........... ${porSeg(p.compras)}
+
+    A espera
+      Abrir o mapa .... metade em até ${seg(p.espera.mapa.mediana)}, 95% em até ${seg(p.espera.mapa.p95)}, o pior ${seg(p.espera.mapa.pior)}
+      Comprar ......... metade em até ${seg(p.espera.compra.mediana)}, 95% em até ${seg(p.espera.compra.p95)}, o pior ${seg(p.espera.compra.pior)}
+
+  INGRESSOS VENDIDOS: ${r.vendidos} de ${r.lugares}
+    fãs na subida ${r.confirmados.subida} · fãs no pico ${r.confirmados.pico} · engajados ${r.confirmados.engajados} · robôs ${r.confirmados.cambistas} · sem resposta até o fim ${r.semConfirmacao}
+
+  METAS DO PICO
+${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
+${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${r.subida.caiuEm.fasPorSegundo} fãs/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
+  Relatório para projetar: relatorios/estreia.html
 ════════════════════════════════════════════════════════════════════
 `;
 }
@@ -533,16 +548,7 @@ export function handleSummary(data) {
         '     Para destravar: docker compose restart ingressa\n\n',
     };
   }
-  if (MODO === 'capacidade') {
-    const capacidade = calcularCapacidade(data);
-    return {
-      stdout: gerarTextoCapacidade(capacidade),
-      '/relatorios/capacidade.txt': gerarTextoCapacidade(capacidade),
-      '/relatorios/capacidade.html': gerarHtmlCapacidade(capacidade),
-    };
-  }
   const resultado = calcularResultado(data);
-  resultado.semConfirmacao = semConfirmacao(resultado);
   return {
     stdout: gerarTexto(resultado),
     '/relatorios/estreia.txt': gerarTexto(resultado),

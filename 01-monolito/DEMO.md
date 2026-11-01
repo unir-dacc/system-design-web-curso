@@ -29,7 +29,8 @@ Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-m
 ### Sobre o teste de carga
 
 Existe **um único teste**: `estreia.js`, a abertura das vendas do maior filme da história.
-Fãs chegando aos montes (desistem após 60 s), fãs muito engajados (nunca desistem) e robôs cambistas, tudo ao mesmo tempo, por 1 minuto.
+Primeiro o público cresce aos poucos, para descobrir até quantos fãs o Ingressa aguenta. Depois vem o pico:
+fãs chegando aos montes, fãs muito engajados (nunca desistem) e robôs cambistas, tudo ao mesmo tempo.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**.
 - **Depois:** abra **`relatorios/estreia.html`** no navegador e projete para a turma
@@ -93,21 +94,28 @@ Pergunta: *"de todo esse tempo, quanto o Ingressa passou trabalhando de verdade?
 
 ## 4. A estreia
 
+A rodada tem duas partes e leva alguns minutos:
+
+1. **A subida:** o público cresce aos poucos (1 fã por segundo, 2, 3...). Em cada degrau, o teste confere se o site continua viável.
+2. **O pico:** as vendas abrem de vez, com fãs, fãs muito engajados e robôs cambistas ao mesmo tempo.
+
 Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel em http://localhost:5665:
 
 ```bash
 docker compose run --rm --service-ports k6 run /scripts/estreia.js
+xdg-open relatorios/estreia.html
 ```
 
-Abra `relatorios/estreia.html` e leia com a turma, bloco por bloco:
+Leia o relatório com a turma, bloco por bloco:
 
 | Bloco | Perguntas |
 |-------|-----------|
-| Topo | Quantos fãs conseguiram comprar? Apareceu algum alerta? |
-| O sistema | Compare as requisições enviadas com as respondidas. Quantos usuários esperavam ao mesmo tempo? |
-| O caminho do fã | Em qual etapa o público se perdeu? |
-| A espera | Quanto tempo o fã esperou? |
-| Metas | Quais passaram? |
+| Topo | Até quantos fãs por segundo o Ingressa aguenta? E no pico, quantos fãs conseguiram comprar? Apareceu algum alerta? |
+| A subida | Em qual degrau a linha fica vermelha? O que acontece com as "pessoas no site ao mesmo tempo" depois desse ponto? |
+| O pico: o sistema | Compare as requisições enviadas com as respondidas. Quantos usuários esperavam ao mesmo tempo? |
+| O pico: o caminho do fã | Em qual etapa o público se perdeu? |
+| O pico: os engajados | Quem nunca desiste conseguiu comprar? |
+| A espera e as metas | Quanto tempo o fã esperou? Quais metas passaram? |
 
 👉 **Observe também:** no `docker compose stats`, CPU e memória do Ingressa durante o teste.
 Depois que o teste acaba, o Ingressa ainda responde?
@@ -117,27 +125,13 @@ curl -s -m 5 localhost:8000/health; echo
 docker compose restart ingressa        # se precisar destravar
 ```
 
-Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"*
-
-## 5. Até quantos fãs o Ingressa aguenta?
-
-O mesmo teste, mas a chegada de fãs sobe em degraus (1 por segundo, 2, 3...). Em cada degrau,
-o teste confere se o site continua viável, com as mesmas metas da estreia.
-
-```bash
-docker compose restart ingressa        # se ele travou na estreia
-docker compose run --rm --service-ports k6 run -e MODO=capacidade /scripts/estreia.js
-xdg-open relatorios/capacidade.html
-```
-
-👉 **Observe:** o número grande no topo e a tabela degrau a degrau. Em qual degrau a linha fica vermelha?
-O que acontece com as "pessoas no site ao mesmo tempo" depois desse ponto?
-
 Pergunta: *"quantas pessoas a estreia do maior filme da história vai trazer? E quantas o Ingressa aguenta?"*
 
-Anote esse número: ele vai ser comparado com o das próximas etapas.
+Anote o número do topo: ele vai ser comparado com o das próximas etapas.
 
-## 6. Com pouca gente
+Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"*
+
+## 5. Com pouca gente
 
 Rode a mesma estreia com bem menos fãs:
 
@@ -151,7 +145,7 @@ Volte para `app/compra.py` e procure o momento em que as regras são verificadas
 
 Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*
 
-## 7. Quando um sistema externo fica lento
+## 6. Quando um sistema externo fica lento
 
 ```bash
 # gateway lento (também dá para fazer pelo Swagger: http://localhost:8001/docs)
