@@ -2,7 +2,7 @@
 
 > **Objetivo:** mostrar que, com o mesmo hardware, dá para atender mais gente
 > colocando a CPU onde está o gargalo, e que um balanceador de carga deixa o
-> Ingressa crescer em cópias e proteger os backends na porta.
+> Ingressa crescer em cópias.
 
 ```
                                     ┌──────────────────────┐
@@ -47,7 +47,7 @@ Pergunta: *"se o Ingressa está no limite de 1 CPU, por que não usar mais? O qu
 | Arquivo | O que mostrar |
 |---------|---------------|
 | `docker-compose.yml` | O Nginx entrou na frente. O Ingressa tem `replicas: 2`. A nova divisão do orçamento: de onde saiu a CPU? |
-| `nginx/templates/ingressa.conf.template` | O `upstream`: como o Nginx sabe quais são os backends e alterna entre eles. E o `limit_conn`: quantas compras e páginas podem estar em andamento ao mesmo tempo |
+| `nginx/nginx.conf` | O `upstream`: como o Nginx sabe quais são os backends e alterna entre eles |
 | `app/main.py` | Os dois backends sobem juntos: por que precisam de uma trava para criar o catálogo? |
 | `app/cache.py` | Nada mudou. Por que o cache precisa estar no Redis, e não na memória de cada backend? |
 
@@ -117,42 +117,6 @@ Pergunta: *"com 3 backends, cada um ainda teria 0,65 CPU? O que precisaria mudar
 docker compose up -d --scale ingressa=2     # volta ao padrão
 ```
 
-## 7. A porta: quem entra é bem atendido
-
-Cada endpoint tem um limite de requisições em andamento ao mesmo tempo (veja `MAX_*` no `docker-compose.yml`). Quem passa do limite recebe na hora um "muita gente agora, tente de novo" (429).
-
-Pergunta: *"por que a compra tem um limite bem menor que o mapa?"*
-
-```bash
-# deixa só 2 compras em andamento e dispara 8 de uma vez
-MAX_COMPRAS_SIMULTANEAS=2 docker compose up -d nginx
-curl -s -X POST localhost:8000/admin/reset > /dev/null
-for i in $(seq 8); do
-  curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/pedidos -H 'Content-Type: application/json' \
-    -d "{\"sessao_id\":8,\"nome\":\"Maria\",\"cpf\":\"52998224725\",\"email\":\"m@ex.com\",\"cartao_token\":\"tok_aprovado\",\"itens\":[{\"assento\":\"C$i\"}]}" &
-done | sort | uniq -c
-docker compose up -d nginx                    # volta ao padrão
-```
-
-👉 **Observe:** quantas compras passaram e quantas foram barradas. Quanto tempo a barrada esperou?
-
-Pergunta: *"recusar gente na porta parece pior do que deixar todo mundo entrar. Por que pode ser melhor para quem está dentro? E para quem foi barrado?"*
-
-Pergunta: *"por que o limite é de compras em andamento, e não de compras por segundo? O que aconteceria com um limite por segundo se o gateway ficasse mais lento?"*
-
-Experimente outros limites e rode a estreia de novo:
-
-```bash
-MAX_COMPRAS_SIMULTANEAS=10 docker compose up -d nginx      # porta estreita
-MAX_COMPRAS_SIMULTANEAS=1000 docker compose up -d nginx    # porta aberta, como se não houvesse limite
-docker compose run --rm --service-ports k6 run /scripts/estreia.js
-docker compose up -d nginx                                  # volta ao padrão
-```
-
-👉 **Observe:** os barrados na porta, o tempo da compra e quantos compradores conseguiram comprar no pico.
-
-Pergunta: *"qual é o limite certo? O que acontece se ele for estreito demais? E largo demais?"*
-
 ---
 
 ## Para fechar a aula
@@ -161,4 +125,4 @@ Deixe no quadro as perguntas que a turma levantou. Elas guiam as próximas aulas
 
 - O que limita o Ingressa agora?
 - Do que a compra gasta, o que precisa mesmo ser feito na hora?
-- Quem foi barrado na porta: o que um site de verdade faria com essa pessoa?
+- Por que o pico ainda derruba tudo?

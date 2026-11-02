@@ -2,9 +2,13 @@
 
 # Os backends. "ingressa" é o nome do serviço no docker-compose.yml: com
 # "replicas: 2", o Docker devolve o endereço dos dois, e o Nginx alterna as
-# requisições entre eles.
+# requisições entre eles. O DNS do Docker (127.0.0.11) é consultado de novo a
+# cada 5 s: se um backend for recriado (com outro endereço) ou se entrar mais
+# um (--scale), o Nginx fica sabendo sozinho.
+resolver 127.0.0.11 valid=5s;
 upstream ingressa {
-    server ingressa:8000;
+    zone backends 64k;
+    server ingressa:8000 resolve;
     # Reaproveita as conexões com os backends em vez de abrir uma por requisição
     keepalive 64;
 }

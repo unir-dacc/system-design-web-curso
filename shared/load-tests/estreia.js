@@ -35,7 +35,7 @@ const ETAPA = __ENV.ETAPA || 'Ingressa';
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -73,7 +73,6 @@ const OLHANDO_O_MAPA_S = [2, 5];
 // clicar em comprar, todo mundo espera a resposta.
 const PACIENCIA = '60s';
 const ESPERA_DA_COMPRA = '10m';
-const ESPERA_DA_COMPRA_MS = 10 * 60 * 1000;
 
 // O que é um site "viável"
 const META_PAGINA_MS = 2000; // programação e mapa
@@ -132,6 +131,11 @@ const ingressosConfirmados = new Counter('ingressos_confirmados');
 // Conferidos no final
 const vendidos = new Gauge('ingressos_vendidos');
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
+
+// Nas etapas com fila: quantas compras esperavam o worker, e quanto tempo depois
+// do fim da rodada a fila esvaziou
+const filaDeCompras = new Trend('fila_de_compras');
+const filaEsvaziouDepois = new Gauge('fila_esvaziou_depois_s');
 
 // Não são falhas do sistema: compra aceita para processar (202), erros de negócio (402, 409, 422) e a recusa na
 // porta pelo limite de compras (429), que é a proteção funcionando
@@ -193,6 +197,13 @@ export const options = {
       ENGAJADOS_POR_SEGUNDO * PICO_S,
       { startTime: inicioDoPico },
     ),
+    // Acompanha o tamanho da fila de compras, nas etapas que têm uma
+    observador: {
+      executor: 'constant-vus',
+      exec: 'observar',
+      vus: 1,
+      duration: `${SUBIDA_S + PICO_S}s`,
+    },
     cambistas: {
       executor: 'constant-vus',
       exec: 'cambista',
@@ -206,6 +217,7 @@ export const options = {
     'tempo_da_pagina{scenario:pico}': [`p(95)<${META_PAGINA_MS}`],
     'tempo_da_compra{scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
     'http_req_failed{scenario:subida}': ['rate>=0'], // para separar os erros do pico (conta feita no resultado)
+    'http_req_failed{scenario:observador}': ['rate>=0'],
 
     // Só para guardar os números
     ...guardar([
@@ -226,6 +238,7 @@ export const options = {
       'usuarios_desistiram{scenario:pico}',
       'dropped_iterations{scenario:pico}',
       'http_reqs{scenario:subida}',
+      'http_reqs{scenario:observador}',
       'compras_concluidas{scenario:subida}',
       'barrados_na_porta{scenario:subida}',
       'barrados_na_porta{scenario:pico}',
@@ -263,7 +276,7 @@ export const options = {
     ),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
-  teardownTimeout: '90s',
+  teardownTimeout: '240s', // espera a fila de compras esvaziar
 };
 
 // --- Ações de um usuário ---
@@ -354,32 +367,15 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
     tags: { name: 'compra', endpoint: 'compra', ...tags },
   });
   medirEndpoint('compra', r);
-  let status = r.status;
-  let duracao = r.timings.duration;
-  if (r.status === 202) {
-    // Nas etapas com pagamento em segundo plano, o usuário
-    // acompanha o pedido até ele ser confirmado ou recusado
-    const inicio = Date.now() - r.timings.duration;
-    const id = r.json('id');
-    status = 0;
-    while (Date.now() - inicio < ESPERA_DA_COMPRA_MS) {
-      sleep(0.5);
-      const p = http.get(`${INGRESSA}/pedidos/${id}`, { timeout: PACIENCIA, tags: { name: 'pedido', endpoint: 'pedido', ...tags } });
-      medirEndpoint('pedido', p);
-      const situacao = p.status === 200 ? p.json('status') : null;
-      if (situacao === 'confirmado') status = 201;
-      if (situacao === 'pagamento_recusado' || situacao === 'cancelado') status = 402;
-      if (situacao === 'pagamento_falhou') status = 503;
-      if (status !== 0) break;
-    }
-    duracao = Date.now() - inicio;
-  }
+  // Nas etapas com fila, 202 = compra aceita, com os assentos reservados: o
+  // usuário vai embora, e o resultado chega por e-mail
+  const status = r.status === 202 ? 201 : r.status;
   if (status === 201) {
     comprasConcluidas.add(1, tags);
     ingressosConfirmados.add(itens.length, tags);
   }
   if (status === 429) barradosNaPorta.add(1, tags);
-  else tempoDaCompra.add(duracao, tags);
+  else tempoDaCompra.add(r.timings.duration, tags);
   return status;
 }
 
@@ -467,6 +463,16 @@ export function cambista() {
   sleep(0.2);
 }
 
+export function observar() {
+  // As etapas sem fila respondem 404 aqui: não é erro do Ingressa
+  const r = http.get(`${INGRESSA}/admin/fila`, {
+    tags: { name: 'observador' },
+    responseCallback: http.expectedStatuses(200, 404),
+  });
+  if (r.status === 200) filaDeCompras.add(r.json('compras_na_fila'));
+  sleep(1);
+}
+
 // --- Antes e depois ---
 
 export function setup() {
@@ -479,6 +485,19 @@ export function setup() {
 }
 
 export function teardown() {
+  // Nas etapas com fila, o worker continua concluindo compras depois que o
+  // público foi embora. Espera a fila esvaziar (até 3 min) antes de conferir.
+  const inicio = Date.now();
+  for (let i = 0; i < 180; i++) {
+    const r = http.get(`${INGRESSA}/admin/fila`, { timeout: '10s', responseCallback: http.expectedStatuses(200, 404) });
+    if (r.status !== 200) break; // etapa sem fila
+    if (r.json('compras_na_fila') === 0) {
+      filaEsvaziouDepois.add((Date.now() - inicio) / 1000);
+      break;
+    }
+    sleep(1);
+  }
+
   // Pedidos ainda em andamento continuam sendo processados no servidor.
   // Espera até 30 s o sistema do cinema terminar antes de conferir.
   let estado = null;
@@ -548,8 +567,10 @@ function calcularResultado(data) {
 
   // 2. O pico
   // No pico conta todo mundo: usuários comuns, engajados e robôs (venda é venda)
-  const enviadas = n('http_reqs') - n('http_reqs{scenario:subida}');
-  const comErro = (v('http_req_failed').passes || 0) - (v('http_req_failed{scenario:subida}').passes || 0);
+  // O observador da fila não é público: fica de fora
+  const enviadas = n('http_reqs') - n('http_reqs{scenario:subida}') - n('http_reqs{scenario:observador}');
+  const comErro =
+    (v('http_req_failed').passes || 0) - (v('http_req_failed{scenario:subida}').passes || 0) - (v('http_req_failed{scenario:observador}').passes || 0);
   const travou = Boolean(v('ingressa_nao_respondeu').value);
   const totalVendidos = v('ingressos_vendidos').value || 0;
   // O caminho de cada público: os curiosos (só olham) e os compradores
@@ -659,6 +680,8 @@ function calcularResultado(data) {
     },
     endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: porEndpoint('pico', PICO_S) },
     progressao,
+    // Nas etapas com fila (sem dados nas outras)
+    fila: v('fila_de_compras').max === undefined ? null : { maior: v('fila_de_compras').max, esvaziouDepoisS: v('fila_esvaziou_depois_s').value },
     picoSimultaneos: v('vus').max || 0,
     vendidos: totalVendidos,
     // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
@@ -789,7 +812,7 @@ ${tabelaDeEndpoints(r.endpoints.subida)}
       Requisições por segundo ....... ${porSeg(p.respondidas)} respondidas de ${porSeg(p.enviadas)} enviadas
       Compras por segundo ........... ${porSeg(p.compras)}
       Pico de usuários ao mesmo tempo ${r.picoSimultaneos}
-      Barrados na porta ............. ${p.barradosNaPorta}  (${porSeg(p.barradosNaPorta)} por segundo)
+      Barrados na porta ............. ${p.barradosNaPorta}  (${porSeg(p.barradosNaPorta)} por segundo)${r.fila ? `\n      Fila de compras ............... no máximo ${r.fila.maior} esperando o worker; esvaziou ${r.fila.esvaziouDepoisS === undefined ? "— (não esvaziou a tempo)" : `${Math.round(r.fila.esvaziouDepoisS)} s depois do fim`}` : ""}
 
     A espera
       Abrir uma página  metade em até ${seg(p.espera.pagina.mediana)}, 95% em até ${seg(p.espera.pagina.p95)}, o pior ${seg(p.espera.pagina.pior)}

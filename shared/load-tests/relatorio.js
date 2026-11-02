@@ -417,6 +417,7 @@ export function gerarHtml(r) {
     ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras no pico`)}
     ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'no site no mesmo instante')}
     ${cartao('Barrados na porta', `${porSeg(p.barradosNaPorta)}/s`, `${inteiro(p.barradosNaPorta)} requisições recusadas pelo limite`)}
+    ${r.fila ? cartao('Fila de compras', inteiro(r.fila.maior), r.fila.esvaziouDepoisS === undefined ? 'no máximo esperando o worker; não esvaziou a tempo' : `no máximo esperando o worker; esvaziou ${Math.round(r.fila.esvaziouDepoisS)} s depois do fim`) : ''}
   </div>
 
   <h2>2 · O pico: a espera</h2>

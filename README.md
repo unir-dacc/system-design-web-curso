@@ -78,7 +78,9 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   ├── docker-compose.yml
 │   └── DEMO.md
 ├── 02-cache/                    # cache das respostas iguais para todos (Redis)
-└── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
+├── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
+├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
+└── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
 ```
 
 ## Comparação justa entre etapas

@@ -1,0 +1,77 @@
+# Os limites (MAX_*_SIMULTANEOS) vêm do docker-compose.yml.
+
+# Os backends. "ingressa" é o nome do serviço no docker-compose.yml: com
+# "replicas: 2", o Docker devolve o endereço dos dois, e o Nginx alterna as
+# requisições entre eles. O DNS do Docker (127.0.0.11) é consultado de novo a
+# cada 5 s: se um backend for recriado (com outro endereço) ou se entrar mais
+# um (--scale), o Nginx fica sabendo sozinho.
+resolver 127.0.0.11 valid=5s;
+upstream ingressa {
+    zone backends 64k;
+    server ingressa:8000 resolve;
+    # Reaproveita as conexões com os backends em vez de abrir uma por requisição
+    keepalive 64;
+}
+
+# A proteção na porta: cada endpoint tem um limite de requisições EM ANDAMENTO,
+# para o Ingressa inteiro (não por usuário). Quem passa do limite recebe 429 na
+# hora, em vez de entrar numa fila que não anda. O que é barato (vem do cache)
+# tem limite alto; o que é caro e demorado (a compra) tem limite baixo.
+#
+# Por que em andamento, e não por segundo? Pela Lei de Little,
+# vazão = em andamento ÷ tempo de cada uma. Se o Ingressa (ou o gateway) fica
+# mais rápido, as requisições terminam antes e entram mais por segundo; se fica
+# mais lento, entram menos. O limite se ajusta sozinho.
+limit_conn_zone $server_name zone=programacao:1m;
+limit_conn_zone $server_name zone=mapa:1m;
+limit_conn_zone $server_name zone=compra:1m;
+limit_conn_zone $server_name zone=pedido:1m;
+limit_conn_zone $server_name zone=outros:1m;
+limit_conn_status 429;
+
+server {
+    listen 80;
+    server_name ingressa;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    # A compra espera o gateway de pagamento: o Nginx espera junto
+    proxy_read_timeout 600s;
+    error_page 429 = @muita_gente;
+
+    # GET /filmes e GET /sessoes: vêm do cache, são baratos
+    location ~ ^/(filmes|sessoes)$ {
+        limit_conn programacao ${MAX_PROGRAMACAO_SIMULTANEAS};
+        proxy_pass http://ingressa;
+    }
+
+    # GET /sessoes/{id}/assentos: também vem do cache
+    location ~ ^/sessoes/[0-9]+/assentos$ {
+        limit_conn mapa ${MAX_MAPAS_SIMULTANEOS};
+        proxy_pass http://ingressa;
+    }
+
+    # POST /pedidos: caro, segura uma thread enquanto espera o gateway
+    location = /pedidos {
+        limit_conn compra ${MAX_COMPRAS_SIMULTANEAS};
+        proxy_pass http://ingressa;
+    }
+
+    # GET /pedidos/{id}: acompanhar um pedido
+    location ~ ^/pedidos/[0-9]+$ {
+        limit_conn pedido ${MAX_PEDIDOS_SIMULTANEOS};
+        proxy_pass http://ingressa;
+    }
+
+    # Todo o resto (ingressos, resumo, saúde, administração)
+    location / {
+        limit_conn outros ${MAX_OUTROS_SIMULTANEOS};
+        proxy_pass http://ingressa;
+    }
+
+    location @muita_gente {
+        default_type application/json;
+        return 429 '{"detail": "Muita gente no site agora. Tente de novo em instantes."}';
+    }
+}
