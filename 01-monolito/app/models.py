@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -57,6 +57,10 @@ class Sessao(Base):
 
 class Pedido(Base):
     __tablename__ = "pedidos"
+    # O Postgres NÃO cria índice para chave estrangeira sozinho. Toda compra soma
+    # os pedidos da sessão e do CPF (limite por CPF e cota de meia): sem este
+    # índice, cada compra leria a tabela inteira, e ela cresce a cada venda.
+    __table_args__ = (Index("ix_pedidos_sessao_cpf", "sessao_id", "cpf"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     sessao_id: Mapped[int] = mapped_column(ForeignKey("sessoes.id"))
@@ -82,12 +86,9 @@ class Pedido(Base):
 class Ingresso(Base):
     __tablename__ = "ingressos"
 
-    # ⚠️ PROPOSITAL: o Postgres NÃO cria índice para chave estrangeira.
-    # Sem índice em sessao_id e pedido_id, contar ingressos de uma sessão
-    # vira uma varredura da tabela inteira conforme as vendas crescem.
     id: Mapped[int] = mapped_column(primary_key=True)
-    pedido_id: Mapped[int] = mapped_column(ForeignKey("pedidos.id"))
-    sessao_id: Mapped[int] = mapped_column(ForeignKey("sessoes.id"))
+    pedido_id: Mapped[int] = mapped_column(ForeignKey("pedidos.id"), index=True)  # os ingressos de um pedido
+    sessao_id: Mapped[int] = mapped_column(ForeignKey("sessoes.id"), index=True)  # os ingressos de uma sessão
     assento: Mapped[str] = mapped_column(String(4))
     tipo: Mapped[str] = mapped_column(String(7))  # inteira | meia
     preco_centavos: Mapped[int]

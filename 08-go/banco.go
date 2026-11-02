@@ -56,7 +56,11 @@ CREATE TABLE IF NOT EXISTS pedidos (
 	cobranca_id varchar,
 	criado_em timestamptz NOT NULL DEFAULT now()
 );
--- ⚠️ PROPOSITAL: o Postgres NÃO cria índice para chave estrangeira (como na versão em Python)
+-- O Postgres NÃO cria índice para chave estrangeira sozinho. Toda compra soma
+-- os pedidos da sessão e do CPF (limite por CPF e cota de meia): sem este
+-- índice, cada compra leria a tabela inteira, e ela cresce a cada venda.
+CREATE INDEX IF NOT EXISTS ix_pedidos_sessao_cpf ON pedidos (sessao_id, cpf);
+
 CREATE TABLE IF NOT EXISTS ingressos (
 	id serial PRIMARY KEY,
 	pedido_id integer NOT NULL REFERENCES pedidos(id),
@@ -67,6 +71,8 @@ CREATE TABLE IF NOT EXISTS ingressos (
 	codigo varchar(32) NOT NULL UNIQUE,
 	criado_em timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS ix_ingressos_pedido_id ON ingressos (pedido_id);  -- os ingressos de um pedido
+CREATE INDEX IF NOT EXISTS ix_ingressos_sessao_id ON ingressos (sessao_id);  -- os ingressos de uma sessão
 `
 
 // prepararBanco cria as tabelas e carrega o catálogo. Os backends sobem ao
