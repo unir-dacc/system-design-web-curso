@@ -1,8 +1,9 @@
 # Etapa 02 - Async
 #
-# Orçamento de hardware do Ingressa nesta etapa (igual à etapa 01):
-#   app:      1 CPU / 512 MB  (1 processo uvicorn, agora async)
-#   postgres: 1 CPU / 512 MB
+# Orçamento do Ingressa: 2 CPUs e 2 GB no total, iguais em todas as etapas.
+# Nesta etapa (igual à etapa 01), eles ficam assim:
+#   app:      1 CPU / 1 GB    (1 processo uvicorn, agora async)
+#   postgres: 1 CPU / 1 GB
 # Os sistemas externos vêm de ../shared/compose.externos.yml e são iguais em todas as etapas.
 
 name: ingressa
@@ -34,7 +35,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 1G
 
   postgres:
     image: postgres:16-alpine
@@ -51,7 +52,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 1G
 
   # Gerador de carga. Não sobe com "up"; é usado com:
   #   docker compose run --rm --service-ports k6 run /scripts/estreia.js

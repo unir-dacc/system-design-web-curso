@@ -43,6 +43,7 @@ function funil(f) {
   const etapas = [
     ['Chegaram', f.chegaram],
     ['Conseguiram entrar no site', f.entraram],
+    ['Viram a programação', f.viramProgramacao],
     ['Viram o mapa de assentos', f.viramMapa],
     ['Tentaram comprar', f.tentaramComprar],
     ['Compraram', f.compraram],
@@ -186,7 +187,7 @@ function tabelaDeDegraus(s, metas) {
       <div class="fas">${d.usuariosPorSegundo}/s</div>
       <div>${d.simultaneos === undefined ? '—' : inteiro(d.simultaneos)}</div>
       <div class="opcional">${decimal(d.comprasPorSegundo)}/s</div>
-      <div class="${classe(d.p95Mapa, metas.mapaMs)}">${tempo(d.p95Mapa)}</div>
+      <div class="${classe(d.p95Pagina, metas.paginaMs)}">${tempo(d.p95Pagina)}</div>
       <div class="${classe(d.p95Compra, metas.compraMs)}">${tempo(d.p95Compra)}</div>
       <div class="opcional ${d.erros === undefined ? '' : d.erros < metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
       <div class="${d.barrados < metas.erros ? 'bom' : 'ruim'}">${porcento(d.barrados)}</div>
@@ -195,7 +196,7 @@ function tabelaDeDegraus(s, metas) {
   );
   return `<div class="degrau cabecalho">
       <div>usuários chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
-      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div>
+      <div>95% das páginas abriram em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div>
       <div></div>
     </div>
     ${linhas.join('')}`;
@@ -214,7 +215,7 @@ export function gerarHtml(r) {
 <header><div>
   <div class="selo">Teste de carga · ${r.etapa}</div>
   <h1>Estreia do maior filme da história</h1>
-  <p>Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
+  <p>Como numa loja de verdade, a maioria só olha: de cada 10 usuários, 3 compram. Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
   ${usuarios(p.usuariosPorSegundo)} por segundo, ${usuarios(p.engajadosPorSegundo)} muito engajados por segundo e ${p.robos} robôs cambistas, durante 1 minuto.</p>
 </div></header>
 <main>
@@ -225,14 +226,14 @@ export function gerarHtml(r) {
     </div>
     <div>
       <div class="rotulo">No pico</div>
-      <div class="grande">${pct(f.compraram, f.chegaram)}%</div>
-      <p>dos usuários conseguiram comprar: ${inteiro(f.compraram)} de ${inteiro(f.chegaram)}.</p>
+      <div class="grande">${pct(f.compraram, f.tentaramComprar)}%</div>
+      <p>de quem tentou comprar conseguiu: ${inteiro(f.compraram)} de ${inteiro(f.tentaramComprar)}.</p>
     </div>
   </section>
   ${alertas(r)}
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% abrem o mapa em até ${tempo(r.metas.mapaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% das páginas (programação e mapa) abrem em até ${tempo(r.metas.paginaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
   <h2>2 · O pico: o sistema</h2>
@@ -246,7 +247,7 @@ export function gerarHtml(r) {
 
   <h2>2 · O pico: o caminho do usuário</h2>
   <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Barrados na porta: <b>${inteiro(p.barrados)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
+  <div class="detalhe" style="margin-top:10px">Só olharam e foram embora: <b>${inteiro(p.soOlharam)}</b> · Desistiram porque uma página não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Barrados na porta: <b>${inteiro(p.barrados)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
 
   <h2>2 · O pico: os usuários muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
@@ -259,7 +260,7 @@ export function gerarHtml(r) {
 
   <h2>2 · O pico: a espera</h2>
   <div class="bloco">
-    ${espera('Abrir o mapa', p.espera.mapa, r.metas.mapaMs)}
+    ${espera('Abrir uma página', p.espera.pagina, r.metas.paginaMs)}
     ${espera('Concluir a compra', p.espera.compra, r.metas.compraMs)}
   </div>
 

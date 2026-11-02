@@ -31,6 +31,8 @@ Deixe abertas três abas: http://localhost:8000/docs, http://localhost:8025 (e-m
 Existe **um único teste**: `estreia.js`, a abertura das vendas do maior filme da história.
 Primeiro o público cresce aos poucos, para descobrir até quantos usuários o Ingressa aguenta. Depois vem o pico:
 usuários chegando aos montes, usuários muito engajados (nunca desistem) e robôs cambistas, tudo ao mesmo tempo.
+Como numa loja de verdade, a maioria dos usuários só olha: abre a programação, olha o mapa de uma ou duas sessões e vai embora.
+De cada 10, 3 compram.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**.
 - **Depois:** abra **`relatorios/estreia.html`** no navegador e projete para a turma

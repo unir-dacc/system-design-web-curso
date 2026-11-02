@@ -30,7 +30,11 @@ docker compose down -v                                    # derruba e apaga os d
 
 Existe **um único teste**, `shared/load-tests/estreia.js`: a abertura das vendas do
 **maior filme da história**, com 60 sessões em salas IMAX de 400 lugares (24.000 lugares,
-para a subida não esgotar os ingressos antes do pico). Uma rodada, duas partes:
+para a subida não esgotar os ingressos antes do pico).
+
+O público é como o de uma loja de verdade: todo usuário abre a programação e olha o mapa de
+uma sessão, mas **a maioria só olha**. De cada 10, 7 dão uma olhada em outra sessão e vão
+embora, e 3 compram. Uma rodada, duas partes:
 
 1. **A subida:** o público cresce em degraus que dobram (1 usuário por segundo, 2, 4, 8...
    até 256). Em cada degrau o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
@@ -82,16 +86,19 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 
 1. **Sistemas externos são idênticos em todas as etapas** (vêm de `shared/compose.externos.yml`).
    Comportamento controlado por configuração, não por hardware.
-2. **Cada etapa declara o orçamento do Ingressa** no topo do seu compose.
+2. **O Ingressa tem sempre o mesmo orçamento: 2 CPUs e 2 GB de RAM**, somando tudo o que é
+   dele (app, banco e o que entrar depois, como Redis, worker ou Nginx). Uma peça nova não
+   ganha hardware novo: ela divide o orçamento com as outras. Cada etapa mostra a divisão
+   no topo do seu compose. Os ganhos vêm da arquitetura, nunca de máquina maior.
 3. **Cada medição começa do zero**: os testes de carga limpam o estado antes de rodar.
-4. **O gerador de carga (k6) roda com 2 CPUs fixas**, num container separado do sistema testado.
+4. **O gerador de carga (k6) roda num container separado**, com até 4 CPUs, fora do orçamento.
 
 | Componente | CPU | Memória | Observação |
 |------------|-----|---------|------------|
 | gateway-pagamento | 0.5 | 128 MB | **lento**: ~1,2 s por cobrança, 5% recusa |
 | sistema-cinema | 2 | 256 MB | **rápido**: mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms, até 200 atendimentos simultâneos |
 | mailpit | 0.25 | 128 MB | SMTP falso, UI em :8025 |
-| k6 | 2 | — | gerador de carga |
+| k6 | 4 | — | gerador de carga |
 
 ## Simuladores: mudando o comportamento ao vivo
 
