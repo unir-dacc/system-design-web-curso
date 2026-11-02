@@ -12,6 +12,7 @@ services:
     ports:
       - "127.0.0.1:8001:8000"
     environment:
+      # Lento: cada cobrança leva ~1,2 s (análise antifraude, bandeira do cartão...)
       LATENCIA_MS: 1200
       TAXA_RECUSA: 0.05
     deploy:
@@ -27,16 +28,17 @@ services:
     volumes:
       - ./seed:/seed:ro
     environment:
-      LATENCIA_MAPA_MS: 800
-      LATENCIA_RESERVA_MS: 600
-      LATENCIA_CONFIRMACAO_MS: 400
-      MAX_CONCORRENCIA: 10
+      # Rápido: o sistema do cinema não deve ser o gargalo do Ingressa
+      LATENCIA_MAPA_MS: 50
+      LATENCIA_RESERVA_MS: 40
+      LATENCIA_CONFIRMACAO_MS: 30
+      MAX_CONCORRENCIA: 200
       RESERVA_TTL_S: 600
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 128M
+          cpus: "2.0"
+          memory: 256M
 
   # Servidor SMTP falso com interface web: http://localhost:8025
   mailpit:

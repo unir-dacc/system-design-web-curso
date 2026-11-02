@@ -64,17 +64,14 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 ```
 ├── shared/                      # igual para todas as etapas
 │   ├── compose.externos.yml     # sistemas externos com limites fixos
-│   ├── gateway-pagamento/       # gateway simulado (lento, configurável)
-│   ├── sistema-cinema/          # sistema de assentos legado (lento, com fila)
+│   ├── gateway-pagamento/       # gateway de pagamento simulado (lento)
+│   ├── sistema-cinema/          # sistema de assentos da rede de cinemas (rápido)
 │   ├── load-tests/estreia.js    # o teste de carga (k6)
 │   └── seed/catalogo.json       # filmes, salas e sessões
-├── 01-monolito/                 # cada etapa é completa e roda sozinha
-│   ├── app/
-│   ├── docker-compose.yml
-│   └── DEMO.md
-├── 02-cache/                    # cache do mapa de assentos (Redis)
-├── 03-async/                    # async/await com o mesmo hardware
-└── 04-nginx/                    # Nginx na frente, com rate limit
+└── 01-monolito/                 # cada etapa é completa e roda sozinha
+    ├── app/
+    ├── docker-compose.yml
+    └── DEMO.md
 ```
 
 ## Comparação justa entre etapas
@@ -89,8 +86,8 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 
 | Componente | CPU | Memória | Observação |
 |------------|-----|---------|------------|
-| gateway-pagamento | 0.5 | 128 MB | latência ~1,2 s, 5% recusa |
-| sistema-cinema | 0.5 | 128 MB | mapa ~800 ms, reserva ~600 ms, confirmação ~400 ms, **10 requisições simultâneas** |
+| gateway-pagamento | 0.5 | 128 MB | **lento**: ~1,2 s por cobrança, 5% recusa |
+| sistema-cinema | 2 | 256 MB | **rápido**: mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms, até 200 atendimentos simultâneos |
 | mailpit | 0.25 | 128 MB | SMTP falso, UI em :8025 |
 | k6 | 2 | — | gerador de carga |
 

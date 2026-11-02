@@ -5,10 +5,10 @@ Representa o sistema legado da rede de cinemas. É ele quem manda nos
 assentos: o Ingressa precisa consultá-lo para mostrar o mapa da sala,
 reservar assentos e confirmar a venda.
 
-Comportamento proposital:
-- é LENTO: cada operação tem latência configurável
-- aguenta POUCAS requisições simultâneas (max_concorrencia). O excedente
-  espera numa fila, então quanto mais carga, maior a latência
+Comportamento:
+- é RÁPIDO no padrão, para não ser o gargalo do Ingressa. A latência e o
+  número de atendimentos simultâneos (max_concorrencia) são configuráveis
+  ao vivo; acima do limite, o excedente espera numa fila
 - é CORRETO: a reserva é atômica, nunca vende o mesmo assento duas vezes
 - reservas não confirmadas expiram depois de reserva_ttl_s
 
@@ -30,11 +30,11 @@ SEED_PATH = os.getenv("SEED_PATH", "/seed/catalogo.json")
 
 
 class Config(BaseModel):
-    latencia_mapa_ms: int = int(os.getenv("LATENCIA_MAPA_MS", "800"))
-    latencia_reserva_ms: int = int(os.getenv("LATENCIA_RESERVA_MS", "600"))
-    latencia_confirmacao_ms: int = int(os.getenv("LATENCIA_CONFIRMACAO_MS", "400"))
+    latencia_mapa_ms: int = int(os.getenv("LATENCIA_MAPA_MS", "50"))
+    latencia_reserva_ms: int = int(os.getenv("LATENCIA_RESERVA_MS", "40"))
+    latencia_confirmacao_ms: int = int(os.getenv("LATENCIA_CONFIRMACAO_MS", "30"))
     variacao_pct: int = int(os.getenv("VARIACAO_PCT", "30"))
-    max_concorrencia: int = int(os.getenv("MAX_CONCORRENCIA", "10"))
+    max_concorrencia: int = int(os.getenv("MAX_CONCORRENCIA", "200"))
     taxa_erro: float = float(os.getenv("TAXA_ERRO", "0"))
     reserva_ttl_s: int = int(os.getenv("RESERVA_TTL_S", "600"))
 
