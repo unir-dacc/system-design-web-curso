@@ -82,7 +82,8 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 ├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
 ├── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
 ├── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
-└── 07-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s
+├── 07-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s
+└── 08-go/                       # a 07 reescrita em Go: mesmo hardware, mesmo teste
 ```
 
 ## Comparação justa entre etapas

@@ -48,7 +48,7 @@ services:
           cpus: "0.2"
           memory: 128M
 
-  # Os backends: o mesmo Ingressa da etapa 02, em 2 cópias. Nenhum guarda
+  # Os backends: o Ingressa em 2 cópias iguais. Nenhum guarda
   # estado na própria memória (o cache está no Redis, os pedidos no Postgres),
   # então qualquer um pode atender qualquer requisição.
   # Para testar outro número: docker compose up -d --scale ingressa=3

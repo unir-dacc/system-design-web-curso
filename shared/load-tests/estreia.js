@@ -37,7 +37,7 @@ const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila', '06-sala-de-espera', '07-mais-hardware'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila', '06-sala-de-espera', '07-mais-hardware', '08-go'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
