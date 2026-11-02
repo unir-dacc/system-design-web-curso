@@ -49,6 +49,7 @@ const PICO_S = 60;
 // comprar, todo mundo espera a resposta.
 const PACIENCIA = '60s';
 const ESPERA_DA_COMPRA = '10m';
+const ESPERA_DA_COMPRA_MS = 10 * 60 * 1000;
 
 // O que é um site "viável"
 const META_MAPA_MS = 2000;
@@ -92,9 +93,9 @@ const ingressosConfirmados = new Counter('ingressos_confirmados');
 const vendidos = new Gauge('ingressos_vendidos');
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
-// Não são falhas do sistema: erros de negócio (402, 409, 422) e a recusa na
+// Não são falhas do sistema: compra aceita para processar (202), erros de negócio (402, 409, 422) e a recusa na
 // porta pelo limite de compras (429), que é a proteção funcionando
-http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422, 429));
+http.setResponseCallback(http.expectedStatuses(200, 201, 202, 402, 409, 422, 429));
 
 // --- Cenários ---
 
@@ -241,13 +242,31 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
     timeout: ESPERA_DA_COMPRA,
     tags: { name: 'compra', ...tags },
   });
-  if (r.status === 201) {
+  let status = r.status;
+  let duracao = r.timings.duration;
+  if (r.status === 202) {
+    // A partir da etapa 03, o pagamento continua em segundo plano: o usuário
+    // acompanha o pedido até ele ser confirmado ou recusado
+    const inicio = Date.now() - r.timings.duration;
+    const id = r.json('id');
+    status = 0;
+    while (Date.now() - inicio < ESPERA_DA_COMPRA_MS) {
+      sleep(0.5);
+      const p = http.get(`${INGRESSA}/pedidos/${id}`, { timeout: PACIENCIA, tags: { name: 'pedido', ...tags } });
+      const situacao = p.status === 200 ? p.json('status') : null;
+      if (situacao === 'confirmado') status = 201;
+      if (situacao === 'pagamento_recusado' || situacao === 'cancelado') status = 402;
+      if (status !== 0) break;
+    }
+    duracao = Date.now() - inicio;
+  }
+  if (status === 201) {
     comprasConcluidas.add(1, tags);
     ingressosConfirmados.add(itens.length, tags);
   }
-  if (r.status === 429) barradosNaPorta.add(1, tags);
-  else tempoDaCompra.add(r.timings.duration, tags);
-  return r.status;
+  if (status === 429) barradosNaPorta.add(1, tags);
+  else tempoDaCompra.add(duracao, tags);
+  return status;
 }
 
 // --- Personagens ---

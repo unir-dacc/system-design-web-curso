@@ -50,7 +50,7 @@ Siga o caminho de uma compra, nesta ordem:
 | `app/main.py` | Ponto de entrada; tabelas e catálogo criados no startup |
 | `app/models.py` | Filme, Sessão, Pedido, Ingresso. **Os assentos não estão aqui**: quem manda neles é o cinema |
 | `app/routes/pedidos.py` | Como cada erro de negócio vira um status HTTP (402, 409, 422) |
-| `app/compra.py` | O coração da aula: os 5 passos de uma compra |
+| `app/compra.py` | O coração da aula: os passos de uma compra, e como as regras de negócio são garantidas |
 | `app/clients.py` | Como o Ingressa conversa com os sistemas externos |
 | `../shared/sistema-cinema/app.py` | O sistema legado da rede de cinemas |
 
@@ -131,25 +131,26 @@ Anote o número do topo: ele vai ser comparado com o das próximas etapas.
 
 Pergunta: *"se a gente der 4 CPUs para o Ingressa, melhora?"*
 
-## 5. Com pouca gente
+## 5. O cambista e as compras simultâneas
 
-Rode a mesma estreia com bem menos usuários:
-
-```bash
-docker compose run --rm --service-ports k6 run -e USUARIOS=3 /scripts/estreia.js
-```
-
-Depois que o teste acabar, pergunte ao Ingressa como ficou a sessão 1, onde os robôs cambistas compram:
+Um cambista dispara 20 compras ao mesmo tempo com o mesmo CPF (o limite é 6 por sessão):
 
 ```bash
-curl -s localhost:8000/sessoes/1/resumo; echo
+curl -s -X POST localhost:8000/admin/reset > /dev/null
+for i in $(seq 20); do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/pedidos -H 'Content-Type: application/json' \
+    -d "{\"sessao_id\":2,\"nome\":\"Cambista\",\"cpf\":\"52998224725\",\"email\":\"c@ex.com\",\"cartao_token\":\"tok_aprovado\",\"itens\":[{\"assento\":\"A$i\"}]}" &
+done | sort | uniq -c
+curl -s localhost:8000/sessoes/2/resumo; echo
 ```
 
-👉 **Observe:** `maior_compra_por_cpf` (o limite é 6 ingressos por CPF) e `meia_vendidas` comparado com `cota_meia`.
+👉 **Observe:** quantas compras deram 201 e quantas deram 422, e o `maior_compra_por_cpf` no resumo.
 
-Volte para `app/compra.py` e procure o momento em que as regras são verificadas e o momento em que os ingressos são gravados.
+Pergunta: *"se as 20 compras chegam no mesmo instante e todas conferem o limite antes de gravar, por que elas não passam todas?"*
 
-Pergunta: *"por que testar com 1 usuário nunca pegaria isso?"*
+Abra `registrar_pedido` em `app/compra.py`: a trava no banco (`pg_advisory_xact_lock`) e o pedido registrado **antes** das chamadas lentas.
+
+Pergunta: *"por que a trava fica no banco e não numa variável do Python? E por que ela é solta antes de falar com o cinema?"*
 
 ## 6. Quando um sistema externo fica lento
 
@@ -174,6 +175,5 @@ Pergunta: *"um sistema que não é nosso pode derrubar o nosso?"*
 Deixe no quadro as perguntas que a turma levantou. Elas guiam as próximas aulas:
 
 - O que limitou o Ingressa na estreia?
-- Por que as regras de negócio falharam?
 - O que acontece com quem desiste no meio da compra?
 - Como descobrir onde está a lentidão sem ler o código?

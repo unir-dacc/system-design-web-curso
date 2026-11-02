@@ -47,10 +47,13 @@ git diff --no-index ../02-cache/app app
 | `app/db.py` | O banco async (`asyncpg`). O limite agora é o pool de conexões, não as threads |
 | `app/clients.py` e `app/cache.py` | Cinema, gateway e Redis com clientes async |
 | `app/routes/catalogo.py` | A rota do mapa devolve a conexão do banco **antes** de esperar o cache |
-| `app/compra.py` | `await db.commit()` antes de esperar o cinema; e-mail e QR code com `asyncio.to_thread` |
+| `app/compra.py` | A compra responde na hora (202): o pagamento, a confirmação e o e-mail continuam em segundo plano (`asyncio.create_task`); o e-mail e o QR code rodam numa thread |
+| `app/routes/pedidos.py` | O cliente acompanha o pedido em `GET /pedidos/{id}` até ser confirmado ou recusado |
 | `app/models.py` | `lazy="selectin"`: no async, não dá para carregar relacionamentos "escondidos" |
 
 Pergunta: *"por que o e-mail e o QR code vão para uma thread, se agora tudo é async? O que aconteceria com as outras requisições enquanto o QR code é gerado?"*
+
+Pergunta: *"o pagamento agora acontece depois da resposta. O que acontece com ele se o processo do Ingressa cair nesse meio-tempo?"*
 
 ## 3. A estreia
 

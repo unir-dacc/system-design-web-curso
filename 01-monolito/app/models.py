@@ -63,10 +63,15 @@ class Pedido(Base):
     nome: Mapped[str]
     cpf: Mapped[str] = mapped_column(String(11))
     email: Mapped[str]
-    status: Mapped[str]  # aguardando_pagamento | pagamento_recusado | confirmado
+    # reservando -> aguardando_pagamento -> confirmado | pagamento_recusado | cancelado
+    status: Mapped[str]
     subtotal_centavos: Mapped[int]
     taxa_centavos: Mapped[int]
     total_centavos: Mapped[int]
+    # Quantos ingressos e quantas meias o pedido tem: pedidos em andamento
+    # também contam para o limite por CPF e para a cota de meia
+    qtd_ingressos: Mapped[int]
+    qtd_meia: Mapped[int]
     reserva_id: Mapped[str | None]
     cobranca_id: Mapped[str | None]
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clients, compra
@@ -10,7 +9,9 @@ from app.schemas import CriarPedido, PedidoOut
 router = APIRouter(tags=["pedidos"])
 
 
-@router.post("/pedidos", status_code=201, response_model=PedidoOut)
+# 202 = "aceito, ainda processando": o pagamento continua em segundo plano e o
+# cliente acompanha o status em GET /pedidos/{id}
+@router.post("/pedidos", status_code=202, response_model=PedidoOut)
 async def criar_pedido(dados: CriarPedido, db: AsyncSession = Depends(get_db)):
     try:
         pedido = await compra.realizar_compra(db, dados)
@@ -20,11 +21,6 @@ async def criar_pedido(dados: CriarPedido, db: AsyncSession = Depends(get_db)):
         raise HTTPException(422, str(erro))
     except clients.AssentosIndisponiveis as erro:
         raise HTTPException(409, {"mensagem": "Assentos indisponíveis", "indisponiveis": erro.assentos})
-    except compra.PagamentoRecusado as erro:
-        return JSONResponse(
-            status_code=402,
-            content={"detail": "Pagamento recusado", "pedido": PedidoOut.model_validate(erro.pedido).model_dump(mode="json")},
-        )
     return PedidoOut.model_validate(pedido)
 
 
