@@ -22,12 +22,16 @@ async def criar_pedido(
     try:
         pedido = await compra.realizar_compra(db, dados)
     except compra.SessaoNaoEncontrada:
+        await fila.depois_de_falhar(x_senha_fila)
         raise HTTPException(404, "Sessão não encontrada")
     except (compra.RegraDeNegocio, clients.AssentosInexistentes) as erro:
+        await fila.depois_de_falhar(x_senha_fila)
         raise HTTPException(422, str(erro))
     except clients.AssentosIndisponiveis as erro:
+        await fila.depois_de_falhar(x_senha_fila)
         raise HTTPException(409, {"mensagem": "Assentos indisponíveis", "indisponiveis": erro.assentos})
     except compra.PagamentoRecusado as erro:
+        await fila.depois_de_falhar(x_senha_fila)
         return JSONResponse(
             status_code=402,
             content={"detail": "Pagamento recusado", "pedido": PedidoOut.model_validate(erro.pedido).model_dump(mode="json")},

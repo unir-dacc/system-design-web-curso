@@ -21,3 +21,8 @@ async def consultar_senha(senha: int):
     if situacao is None:
         raise HTTPException(404, "Senha não encontrada")
     return situacao
+
+
+@router.delete("/{senha}", status_code=204)
+async def sair_da_fila(senha: int):
+    await fila.sair(senha)

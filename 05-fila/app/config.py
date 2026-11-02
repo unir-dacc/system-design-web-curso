@@ -12,10 +12,10 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 # Por quanto tempo o mapa de assentos fica guardado no cache
 MAPA_TTL_S = int(os.getenv("MAPA_TTL_S", "5"))
 
-# Fila virtual: quantas senhas por segundo são liberadas para comprar, e por
+# Fila virtual: quantas pessoas podem estar comprando ao mesmo tempo, e por
 # quanto tempo quem foi liberado pode comprar
-RITMO_FILA_POR_S = int(os.getenv("RITMO_FILA_POR_S", "8"))
-JANELA_COMPRA_S = int(os.getenv("JANELA_COMPRA_S", "180"))
+MAX_COMPRANDO = int(os.getenv("MAX_COMPRANDO", "24"))
+JANELA_COMPRA_S = int(os.getenv("JANELA_COMPRA_S", "60"))
 
 # Horários são exibidos no fuso das sessões do catálogo
 FUSO_HORARIO = timezone(timedelta(hours=-4))

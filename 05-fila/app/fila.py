@@ -1,44 +1,65 @@
 """
 Fila virtual (sala de espera).
 
-Quem chega pega uma senha. Um liberador avança, no ritmo que o sistema
-aguenta (RITMO_FILA_POR_S), o número da última senha liberada. A posição de
-cada pessoa é só a diferença entre a senha dela e a última liberada: não
-existe uma lista de pessoas na memória, só dois contadores no Redis.
+Quem chega pega uma senha. A posição de cada pessoa é só a diferença entre a
+senha dela e a última liberada: não existe uma lista de pessoas na memória,
+só contadores no Redis.
 
-Quem é liberado ganha uma janela de JANELA_COMPRA_S segundos para comprar.
-Uma senha vale uma compra.
+O liberador deixa no máximo MAX_COMPRANDO pessoas comprando ao mesmo tempo.
+Quando alguém termina a compra, some ou estoura a janela de JANELA_COMPRA_S
+segundos, a vaga abre e a próxima senha é liberada. Assim a fila se ajusta
+sozinha: se as compras andam rápido, entra mais gente; se o sistema do cinema
+fica lento, entra menos.
 
-Quem desiste da fila simplesmente para de consultar a posição. Cada consulta
-renova um "sinal de vida" da senha; o liberador pula as senhas sem sinal de
-vida, para não gastar com elas uma vaga do ritmo.
+Ninguém avisa quando desiste: a pessoa simplesmente some. Por isso:
+- quem espera consulta a posição de tempos em tempos, e cada consulta renova
+  um "sinal de vida"; o liberador pula as senhas sem sinal de vida;
+- quem está comprando tem um prazo curto (PRAZO_COMPRANDO_S), renovado a cada
+  consulta ou tentativa de compra; sem renovação, a vaga volta para a fila.
 """
 
 import asyncio
 import time
 
 from app.cache import r
-from app.config import JANELA_COMPRA_S, RITMO_FILA_POR_S
+from app.config import JANELA_COMPRA_S, MAX_COMPRANDO
 
 EMITIDAS = "fila:emitidas"
 LIBERADAS = "fila:liberadas"
-SINAL_DE_VIDA_S = 30  # maior que o maior intervalo entre consultas (15 s)
+COMPRANDO = "fila:comprando"  # senhas comprando agora, com o prazo de cada uma
 
-# Libera a próxima senha de alguém que ainda está esperando, pulando as senhas
-# abandonadas (sem sinal de vida). Nunca passa da última emitida: se não há
-# ninguém esperando, a capacidade daquele momento não fica "guardada" para depois.
+# Quanto tempo falta para chegar à frente, estimado por quantas compras cabem
+# por segundo (cada pessoa leva uns 4 s comprando).
+SEGUNDOS_POR_COMPRA = 4
+# Quem está longe consulta pouco: milhares de pessoas perguntando "e agora?" o
+# tempo todo derrubariam o próprio Ingressa. Mas o intervalo diminui conforme a
+# pessoa se aproxima da frente, para ninguém ser liberado enquanto "dorme".
+CONSULTAR_NO_MAXIMO_A_CADA_S = 20
+SINAL_DE_VIDA_S = 45  # maior que o maior intervalo de consulta
+PRAZO_COMPRANDO_S = 10
+PRAZO_PARA_SE_APRESENTAR_S = 3  # liberado e não apareceu: a vaga volta logo
+
+# Libera senhas enquanto houver vaga para comprar, pulando as abandonadas.
 # Roda dentro do Redis, de uma vez só (atômico).
-_liberar_uma = r.register_script(
+_liberar = r.register_script(
     """
+    local agora = tonumber(ARGV[1])
+    local maximo = tonumber(ARGV[2])
+    local prazo_inicial = tonumber(ARGV[3])
+
+    -- devolvem a vaga: quem terminou o prazo sem dar sinal
+    redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', agora)
+
     local emitidas = tonumber(redis.call('GET', KEYS[1]) or '0')
     local liberadas = tonumber(redis.call('GET', KEYS[2]) or '0')
     local pulos = 0
-    while liberadas < emitidas and pulos < 1000 do
+    while redis.call('ZCARD', KEYS[3]) < maximo and liberadas < emitidas and pulos < 1000 do
         liberadas = liberadas + 1
         if redis.call('EXISTS', 'fila:viva:' .. liberadas) == 1 then
-            break
+            redis.call('ZADD', KEYS[3], agora + prazo_inicial, liberadas)
+        else
+            pulos = pulos + 1
         end
-        pulos = pulos + 1
     end
     redis.call('SET', KEYS[2], liberadas)
     """
@@ -46,10 +67,10 @@ _liberar_uma = r.register_script(
 
 
 async def liberador() -> None:
-    """Roda para sempre, em segundo plano, liberando RITMO_FILA_POR_S senhas por segundo."""
+    """Roda para sempre, em segundo plano, abrindo vagas conforme as compras terminam."""
     while True:
-        await _liberar_uma(keys=[EMITIDAS, LIBERADAS])
-        await asyncio.sleep(1 / RITMO_FILA_POR_S)
+        await _liberar(keys=[EMITIDAS, LIBERADAS, COMPRANDO], args=[time.time(), MAX_COMPRANDO, PRAZO_PARA_SE_APRESENTAR_S])
+        await asyncio.sleep(0.05)
 
 
 async def entrar() -> dict:
@@ -67,37 +88,40 @@ async def consultar(senha: int) -> dict | None:
     if senha > liberadas:
         await r.set(f"fila:viva:{senha}", 1, ex=SINAL_DE_VIDA_S)  # ainda estou aqui
         posicao = senha - liberadas
-        estimativa_s = posicao / RITMO_FILA_POR_S
+        estimativa_s = posicao * SEGUNDOS_POR_COMPRA / MAX_COMPRANDO
         return {
             "senha": senha,
             "liberado": False,
             "posicao": posicao,
             "estimativa_s": round(estimativa_s),
-            # Quem está longe consulta menos vezes: milhares de pessoas perguntando
-            # "e agora?" a cada segundo também seriam uma sobrecarga
-            "consultar_em_s": min(15, max(2, round(estimativa_s / 10))),
+            # Umas 4 consultas até chegar à frente: nem demais, nem de menos
+            "consultar_em_s": max(1, min(CONSULTAR_NO_MAXIMO_A_CADA_S, round(estimativa_s / 4))),
         }
 
-    # Liberada: a janela para comprar começa na primeira consulta depois da liberação
-    chave = f"fila:janela:{senha}"
-    await r.set(chave, time.time() + JANELA_COMPRA_S, nx=True, ex=24 * 3600)
-    valida_ate = float(await r.get(chave))
-    return {
-        "senha": senha,
-        "liberado": valida_ate > time.time(),
-        "posicao": 0,
-        "valida_por_s": max(0, round(valida_ate - time.time())),
-    }
+    if not await senha_valida(senha):
+        # Já comprou, sumiu por tempo demais ou estourou a janela: precisa voltar para a fila
+        return {"senha": senha, "liberado": False, "posicao": 0, "expirada": True}
+    return {"senha": senha, "liberado": True, "posicao": 0}
 
 
 async def senha_valida(senha: int) -> bool:
-    valida_ate = await r.get(f"fila:janela:{senha}")
-    return valida_ate is not None and float(valida_ate) > time.time()
+    """Confere se a senha está comprando agora e renova o prazo dela."""
+    prazo = await r.zscore(COMPRANDO, senha)
+    if prazo is None or prazo < time.time():
+        return False
+    # A janela total começa na primeira vez que a senha é usada
+    await r.set(f"fila:janela:{senha}", time.time() + JANELA_COMPRA_S, nx=True, ex=JANELA_COMPRA_S * 2)
+    fim_da_janela = float(await r.get(f"fila:janela:{senha}"))
+    if fim_da_janela < time.time():
+        await r.zrem(COMPRANDO, senha)
+        return False
+    await r.zadd(COMPRANDO, {senha: min(time.time() + PRAZO_COMPRANDO_S, fim_da_janela)})
+    return True
 
 
 async def usar(senha: int) -> None:
-    """Depois de uma compra concluída, a senha não vale mais."""
-    await r.set(f"fila:janela:{senha}", 0, xx=True)
+    """Depois de uma compra concluída, a senha não vale mais e a vaga abre para o próximo."""
+    await r.zrem(COMPRANDO, senha)
 
 
 async def estado() -> dict:
@@ -107,5 +131,18 @@ async def estado() -> dict:
         "senhas_emitidas": emitidas,
         "senhas_liberadas": liberadas,
         "pessoas_esperando": emitidas - liberadas,
-        "ritmo_por_s": RITMO_FILA_POR_S,
+        "comprando_agora": await r.zcard(COMPRANDO),
+        "max_comprando": MAX_COMPRANDO,
     }
+
+
+async def depois_de_falhar(senha: int) -> None:
+    """A compra falhou (assento ocupado, cartão recusado...): quem quiser tentar de
+    novo tem PRAZO_PARA_SE_APRESENTAR_S segundos; quem desistiu devolve a vaga logo."""
+    await r.zadd(COMPRANDO, {senha: time.time() + PRAZO_PARA_SE_APRESENTAR_S}, xx=True)
+
+
+async def sair(senha: int) -> None:
+    """A pessoa avisou que desistiu: a senha é pulada e a vaga (se tinha) abre na hora."""
+    await r.delete(f"fila:viva:{senha}")
+    await r.zrem(COMPRANDO, senha)

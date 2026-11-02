@@ -55,9 +55,9 @@ services:
       # Tempo de vida do mapa no cache. Para testar outro valor:
       #   MAPA_TTL_S=30 docker compose up -d ingressa
       MAPA_TTL_S: ${MAPA_TTL_S:-5}
-      # Quantas senhas da fila são liberadas por segundo. Para testar outro valor:
-      #   RITMO_FILA_POR_S=4 docker compose up -d ingressa
-      RITMO_FILA_POR_S: ${RITMO_FILA_POR_S:-8}
+      # Quantas pessoas da fila podem estar comprando ao mesmo tempo. Para testar outro valor:
+      #   MAX_COMPRANDO=12 docker compose up -d ingressa
+      MAX_COMPRANDO: ${MAX_COMPRANDO:-24}
     volumes:
       - ../shared/seed:/seed:ro
     depends_on:

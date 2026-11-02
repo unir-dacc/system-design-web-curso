@@ -1,14 +1,14 @@
 # Aula 05: Fila virtual
 
 > **Objetivo:** em vez de barrar quem passa do limite, colocar todo mundo numa
-> sala de espera e liberar as pessoas na ordem de chegada, no ritmo que o
-> sistema aguenta.
+> sala de espera e liberar as pessoas na ordem de chegada, conforme abrem vagas
+> para comprar.
 
 ```
  usuário ──▶ POST /fila ───────────────▶ "sua senha é 1.214, posição 320"
              GET /fila/1214 (de tempos em tempos) ──▶ ... "liberado!"
                                                           │
-                 o liberador avança X senhas por segundo ─┘  (dois contadores no Redis)
+      o liberador mantém no máximo N pessoas comprando ─┘  (contadores no Redis)
                                                           ▼
              mapa de assentos ──▶ compra (só com senha liberada: header X-Senha-Fila)
 ```
@@ -42,8 +42,8 @@ git diff --no-index ../04-nginx/app app
 | Arquivo | O que mostrar |
 |---------|---------------|
 | `app/fila.py` | Dois contadores no Redis (senhas emitidas e última liberada). A posição é uma subtração |
-| `app/fila.py` | O liberador: um script que roda dentro do Redis, libera uma senha por vez e pula quem desistiu |
-| `app/fila.py` | O "sinal de vida": cada consulta da posição avisa que a pessoa ainda está esperando |
+| `app/fila.py` | O liberador: um script que roda dentro do Redis e libera senhas sempre que abre uma vaga para comprar |
+| `app/fila.py` | O "sinal de vida": cada consulta e cada tentativa de compra avisam que a pessoa ainda está lá. Quem some é pulado ou devolve a vaga |
 | `app/routes/pedidos.py` | Sem senha liberada, a compra recebe 403. Uma senha vale uma compra |
 | `app/main.py` | O liberador roda em segundo plano enquanto a aplicação está de pé |
 
@@ -67,7 +67,7 @@ curl -s localhost:8000/fila/41; echo      # troque 41 pela sua senha
 curl -s localhost:8000/fila; echo         # o estado da fila
 ```
 
-👉 **Observe:** a posição caindo, a estimativa de espera e o `consultar_em_s`.
+👉 **Observe:** a posição caindo, o `consultar_em_s` e, no estado da fila, o `comprando_agora`.
 
 Pergunta: *"por que o servidor diz de quanto em quanto tempo consultar?"*
 
@@ -89,15 +89,17 @@ Abra o relatório desta aula ao lado do relatório da aula 04.
 
 Pergunta: *"é melhor esperar alguns minutos numa fila ou levar um 'tente de novo'?"*
 
-Experimente outros ritmos e rode a estreia de novo:
+Experimente outros limites de pessoas comprando ao mesmo tempo e rode a estreia de novo:
 
 ```bash
-RITMO_FILA_POR_S=4 docker compose up -d ingressa
-RITMO_FILA_POR_S=16 docker compose up -d ingressa
-RITMO_FILA_POR_S=8 docker compose up -d ingressa    # volta ao padrão
+MAX_COMPRANDO=8 docker compose up -d ingressa
+MAX_COMPRANDO=60 docker compose up -d ingressa
+MAX_COMPRANDO=24 docker compose up -d ingressa      # volta ao padrão
 ```
 
-Pergunta: *"qual é o ritmo certo? O que acontece com o sistema do cinema se liberarmos rápido demais?"*
+Pergunta: *"qual é o número certo? O que acontece com o sistema do cinema se deixarmos gente demais comprando ao mesmo tempo?"*
+
+Pergunta: *"por que limitar quantas pessoas estão comprando, e não quantas entram por segundo?"*
 
 ---
 

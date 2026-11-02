@@ -97,9 +97,9 @@ const ingressosConfirmados = new Counter('ingressos_confirmados');
 const vendidos = new Gauge('ingressos_vendidos');
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
-// Não são falhas do sistema: erros de negócio (402, 409, 422) e a recusa na
+// Não são falhas do sistema: "sair da fila" (204), erros de negócio (402, 409, 422) e a recusa na
 // porta pelo limite de compras (429), que é a proteção funcionando
-http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422, 429));
+http.setResponseCallback(http.expectedStatuses(200, 201, 204, 402, 409, 422, 429));
 
 // --- Cenários ---
 
@@ -269,7 +269,7 @@ function esperarNaFila(tags = {}) {
   const entrada = http.post(`${INGRESSA}/fila`, null, { timeout: PACIENCIA, tags: { name: 'fila', ...tags } });
   if (entrada.status !== 201) return null;
   filaEntraram.add(1, tags);
-  const senha = entrada.json('senha');
+  let senha = entrada.json('senha');
   const inicio = Date.now();
   let situacao = entrada.json();
 
@@ -279,10 +279,21 @@ function esperarNaFila(tags = {}) {
   const desistirEm = exec.scenario.name === 'subida' ? exec.scenario.startTime + SUBIDA_S * 1000 : Infinity;
 
   while (!situacao.liberado) {
-    if (Date.now() >= desistirEm) return null;
+    if (Date.now() >= desistirEm) {
+      // Avisa que está saindo ("sair da fila"): a vaga não fica esperando por ela
+      http.del(`${INGRESSA}/fila/${senha}`, null, { tags: { name: 'fila', ...tags } });
+      return null;
+    }
     sleep(situacao.consultar_em_s || 2);
     const r = http.get(`${INGRESSA}/fila/${senha}`, { timeout: PACIENCIA, tags: { name: 'fila', ...tags } });
     if (r.status === 200) situacao = r.json();
+    if (situacao.expirada) {
+      // A senha foi pulada ou a janela venceu: pega outra senha e continua esperando
+      const nova = http.post(`${INGRESSA}/fila`, null, { timeout: PACIENCIA, tags: { name: 'fila', ...tags } });
+      if (nova.status !== 201) return null;
+      senha = nova.json('senha');
+      situacao = nova.json();
+    }
   }
   filaLiberados.add(1, tags);
   tempoNaFila.add(Date.now() - inicio, tags);
