@@ -19,7 +19,7 @@ cd 01-monolito
 
 docker compose up -d --build --wait                       # sobe a etapa
 docker compose run --rm --service-ports k6 run /scripts/estreia.js   # teste de carga
-docker compose run --rm --service-ports k6 run -e USUARIOS=100 /scripts/estreia.js  # mais usuários por segundo
+docker compose run --rm --service-ports k6 run -e USUARIOS=1000 /scripts/estreia.js # mais usuários por segundo
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
@@ -29,12 +29,13 @@ docker compose down -v                                    # derruba e apaga os d
 ### O teste de carga
 
 Existe **um único teste**, `shared/load-tests/estreia.js`: a abertura das vendas do
-**maior filme da história**. Uma rodada, duas partes:
+**maior filme da história**, com 60 sessões em salas IMAX de 400 lugares (24.000 lugares,
+para a subida não esgotar os ingressos antes do pico). Uma rodada, duas partes:
 
-1. **A subida:** o público cresce em degraus (1 usuário por segundo, 2, 3...). Em cada degrau
-   o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
-2. **O pico:** por 1 minuto chegam 50 usuários por segundo (desistem se o site não carregar
-   em 60 s; depois de clicar em comprar, esperam a resposta), 5 usuários muito engajados por
+1. **A subida:** o público cresce em degraus que dobram (1 usuário por segundo, 2, 4, 8...
+   até 256). Em cada degrau o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
+2. **O pico:** por 1 minuto chegam 400 usuários por segundo (desistem se o site não carregar
+   em 60 s; depois de clicar em comprar, esperam a resposta), 40 usuários muito engajados por
    segundo (nunca desistem e tentam de novo até conseguir) e robôs cambistas tentando
    furar o limite de ingressos por CPF.
 

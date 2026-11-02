@@ -2,7 +2,7 @@
 //
 // Uma rodada, duas partes:
 //
-//   1. A SUBIDA: antes do pico, os usuários chegam em degraus (1 por segundo, 2, 3...).
+//   1. A SUBIDA: antes do pico, os usuários chegam em degraus (1 por segundo, 2, 4, 8...).
 //      Em cada degrau conferimos se o site continua viável. É assim que
 //      descobrimos até quantos usuários o Ingressa aguenta.
 //
@@ -30,10 +30,10 @@ const GATEWAY = 'http://gateway-pagamento:8000';
 const ETAPA = __ENV.ETAPA || 'Ingressa';
 
 // O pico
-const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 50);
+const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 400);
 
-// A subida: degraus sempre abaixo do pico
-const DEGRAUS = (__ENV.DEGRAUS || '1,2,3,4,6,8,12,16,24,32')
+// A subida: degraus dobrando, sempre abaixo do pico
+const DEGRAUS = (__ENV.DEGRAUS || '1,2,4,8,16,32,64,128,256')
   .split(',')
   .map(Number)
   .filter((d) => d < USUARIOS_NO_PICO);
@@ -57,7 +57,8 @@ const META_COMPRA_MS = 5000; // uma compra leva ~2,7 s só esperando o cinema e 
 const META_ERROS = 0.01;
 
 // Sessões e cambistas
-const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
+// Todas as sessões da estreia (1, 2 e 7 a 64): 60 sessões em salas IMAX de 400 lugares, 24.000 lugares
+const SESSOES = [1, 2, ...Array.from({ length: 58 }, (_, i) => 7 + i)];
 const CPFS_CAMBISTAS = ['11144477735', '52998224725', '39053344705'];
 
 // --- Métricas ---
