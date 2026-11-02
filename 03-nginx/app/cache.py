@@ -15,54 +15,51 @@ só UMA requisição monta a resposta; as outras esperam ela ficar pronta. Sem
 isso, todas as visitas daquele instante iriam juntas ao banco ou ao cinema.
 """
 
-import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 
-import redis.asyncio as redis
+import redis
 
 from app.config import REDIS_URL
 
-# Com async, milhares de requisições podem pedir o Redis ao mesmo tempo. O pool
-# limita as conexões (cada uma é um arquivo aberto); quem passar do limite espera a vez.
-r = redis.Redis(connection_pool=redis.BlockingConnectionPool.from_url(REDIS_URL, max_connections=50, timeout=10))
+r = redis.Redis.from_url(REDIS_URL)
 
 TRAVA_S = 10  # se quem está montando a resposta travar, a trava se desfaz sozinha
 ESPERA_MAXIMA_S = 5
 
 
-async def resposta_pronta(chave: str, validade_s: int, montar: Callable[[], Awaitable[bytes]]) -> bytes:
+def resposta_pronta(chave: str, validade_s: int, montar: Callable[[], bytes]) -> bytes:
     """Devolve a resposta guardada em `chave` ou, se não houver, monta, guarda e devolve."""
-    guardada = await r.get(chave)
+    guardada = r.get(chave)
     if guardada is not None:
         return guardada
 
     # Só quem conseguir criar a trava monta a resposta
-    if await r.set(f"trava:{chave}", 1, nx=True, ex=TRAVA_S):
+    if r.set(f"trava:{chave}", 1, nx=True, ex=TRAVA_S):
         try:
-            resposta = await montar()
-            await r.set(chave, resposta, ex=validade_s)
+            resposta = montar()
+            r.set(chave, resposta, ex=validade_s)
             return resposta
         finally:
-            await r.delete(f"trava:{chave}")
+            r.delete(f"trava:{chave}")
 
     # Outra requisição já está montando: espera a cópia aparecer
     limite = time.time() + ESPERA_MAXIMA_S
     while time.time() < limite:
-        await asyncio.sleep(0.02)  # esperar não ocupa o event loop
-        guardada = await r.get(chave)
+        time.sleep(0.02)
+        guardada = r.get(chave)
         if guardada is not None:
             return guardada
-    return await montar()
+    return montar()
 
 
 def chave_do_mapa(sessao_id: int) -> str:
     return f"mapa:{sessao_id}"
 
 
-async def esquecer(chave: str) -> None:
-    await r.delete(chave)
+def esquecer(chave: str) -> None:
+    r.delete(chave)
 
 
-async def limpar() -> None:
-    await r.flushdb()
+def limpar() -> None:
+    r.flushdb()

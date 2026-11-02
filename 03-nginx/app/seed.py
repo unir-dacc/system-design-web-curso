@@ -2,15 +2,15 @@ import json
 from datetime import datetime
 
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.config import SEED_PATH
 from app.models import Cinema, Filme, Sala, Sessao
 
 
-async def carregar_catalogo(db: AsyncSession) -> None:
+def carregar_catalogo(db: Session) -> None:
     """Popula filmes, cinemas, salas e sessões a partir do mesmo arquivo usado pelo sistema do cinema."""
-    if await db.scalar(select(func.count()).select_from(Filme)):
+    if db.scalar(select(func.count()).select_from(Filme)):
         return
 
     with open(SEED_PATH) as f:
@@ -28,4 +28,4 @@ async def carregar_catalogo(db: AsyncSession) -> None:
         for s in catalogo["salas"]
     )
     db.add_all(Sessao(**{**s, "inicio": datetime.fromisoformat(s["inicio"])}) for s in catalogo["sessoes"])
-    await db.commit()
+    db.commit()

@@ -1,10 +1,11 @@
-# Etapa 03 - Async
+# Etapa 03 - Nginx na frente de 2 backends
 #
 # Orçamento do Ingressa: 2 CPUs e 2 GB no total, iguais em todas as etapas.
 # Nesta etapa, eles ficam assim:
-#   app:      1 CPU    / 1 GB    (1 processo uvicorn, agora async)
-#   postgres: 0.75 CPU / 768 MB  (igual à etapa 02)
-#   redis:    0.25 CPU / 256 MB  (igual à etapa 02)
+#   nginx:    0.2 CPU  / 128 MB          (novo: a porta de entrada)
+#   ingressa: 0.65 CPU / 512 MB, cada um (2 backends: 1,3 CPU no total, com a CPU que sobrava no Postgres)
+#   postgres: 0.25 CPU / 640 MB          (usava pouco do que tinha)
+#   redis:    0.25 CPU / 256 MB          (igual à etapa 02)
 # Os sistemas externos vêm de ../shared/compose.externos.yml e são iguais em todas as etapas.
 
 name: ingressa
@@ -13,14 +14,47 @@ include:
   - ../shared/compose.externos.yml
 
 services:
+  # A porta de entrada: todo acesso passa pelo Nginx, que distribui as
+  # requisições entre os backends.
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "127.0.0.1:8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ulimits:
+      nofile: 65536
+    depends_on:
+      ingressa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # Os backends: o mesmo Ingressa da etapa 02, em 2 cópias. Nenhum guarda
+  # estado na própria memória (o cache está no Redis, os pedidos no Postgres),
+  # então qualquer um pode atender qualquer requisição.
+  # Para testar outro número: docker compose up -d --scale ingressa=3
   ingressa:
     build: .
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.65"
+          memory: 512M
     # Limite de arquivos abertos do processo (cada conexão de rede conta como um).
     # Fixado aqui para que o resultado seja o mesmo em qualquer máquina.
     ulimits:
       nofile: 1024
-    ports:
-      - "127.0.0.1:8000:8000"
+    # Sem porta publicada: só o Nginx fala com os backends
     volumes:
       - ../shared/seed:/seed:ro
     depends_on:
@@ -34,11 +68,6 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1G
 
   postgres:
     image: postgres:16-alpine
@@ -54,8 +83,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.75"
-          memory: 768M
+          cpus: "0.25"
+          memory: 640M
 
   redis:
     image: redis:7.4-alpine
@@ -89,8 +118,9 @@ services:
       # Só leitura: o relatório compara com o último resultado das outras etapas
       - ..:/curso:ro
     environment:
-      BASE_URL: http://ingressa:8000
-      ETAPA: "Etapa 03 · Async"
+      # O teste entra pela porta da frente, como um usuário
+      BASE_URL: http://nginx:80
+      ETAPA: "Etapa 03 · Nginx"
       # Ao final, o painel é salvo em relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD: "true"

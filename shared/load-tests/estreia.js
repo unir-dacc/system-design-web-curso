@@ -2,7 +2,7 @@
 //
 // Uma rodada, duas partes:
 //
-//   1. A SUBIDA: antes do pico, os usuários chegam em degraus (1 por segundo, 2, 4, 8...).
+//   1. A SUBIDA: antes do pico, os usuários chegam em degraus (1 por segundo, 2, 4, 8, 12, 16, 24...).
 //      Em cada degrau conferimos se o site continua viável. É assim que
 //      descobrimos até quantos usuários o Ingressa aguenta.
 //
@@ -34,7 +34,7 @@ const ETAPA = __ENV.ETAPA || 'Ingressa';
 
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo salvo de cada uma das outras etapas.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-async'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx'];
 const OUTRAS_ETAPAS = new SharedArray('outras etapas', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -48,8 +48,9 @@ const OUTRAS_ETAPAS = new SharedArray('outras etapas', () =>
 // O pico
 const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 400);
 
-// A subida: degraus dobrando, sempre abaixo do pico
-const DEGRAUS = (__ENV.DEGRAUS || '1,2,4,8,16,32,64,128,256')
+// A subida: cada degrau tem ~1,5× o anterior, sempre abaixo do pico. Com degraus
+// que dobram, um ganho menor que 2× não apareceria na capacidade.
+const DEGRAUS = (__ENV.DEGRAUS || '1,2,4,8,12,16,24,32,48,64,96,128,192,256')
   .split(',')
   .map(Number)
   .filter((d) => d < USUARIOS_NO_PICO);

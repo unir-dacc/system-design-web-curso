@@ -36,7 +36,7 @@ O público é como o de uma loja de verdade: todo usuário abre a programação 
 uma sessão, mas **a maioria só olha**. De cada 10, 7 dão uma olhada em outra sessão e vão
 embora, e 3 compram. Uma rodada, duas partes:
 
-1. **A subida:** o público cresce em degraus que dobram (1 usuário por segundo, 2, 4, 8...
+1. **A subida:** o público cresce em degraus de ~1,5× (1 usuário por segundo, 2, 4, 8, 12, 16, 24...
    até 256). Em cada degrau o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
 2. **O pico:** por 1 minuto chegam 400 usuários por segundo (desistem se o site não carregar
    em 60 s; depois de clicar em comprar, esperam a resposta), 40 usuários muito engajados por
@@ -78,7 +78,7 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   ├── docker-compose.yml
 │   └── DEMO.md
 ├── 02-cache/                    # cache das respostas iguais para todos (Redis)
-└── 03-async/                    # rascunho: vai ser refeita em cima da 02
+└── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
 ```
 
 ## Comparação justa entre etapas

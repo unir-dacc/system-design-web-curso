@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta, timezone
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://ingressa:ingressa@postgres:5432/ingressa")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://ingressa:ingressa@postgres:5432/ingressa")
 CINEMA_URL = os.getenv("CINEMA_URL", "http://sistema-cinema:8000")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "http://gateway-pagamento:8000")
 SMTP_HOST = os.getenv("SMTP_HOST", "mailpit")

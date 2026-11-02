@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app import cache
 from app.db import get_db
@@ -11,8 +11,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.post("/reset")
-async def reset(db: AsyncSession = Depends(get_db)):
-    await db.execute(text("TRUNCATE ingressos, pedidos RESTART IDENTITY"))
-    await db.commit()
-    await cache.limpar()
+def reset(db: Session = Depends(get_db)):
+    db.execute(text("TRUNCATE ingressos, pedidos RESTART IDENTITY"))
+    db.commit()
+    cache.limpar()
     return {"status": "pedidos, ingressos e cache apagados"}

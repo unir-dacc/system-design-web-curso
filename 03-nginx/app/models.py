@@ -5,11 +5,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
-# No async não dá para carregar um relacionamento "escondido" na hora do acesso
-# (sessao.filme faria uma consulta no meio do código): eles são carregados junto.
-# - lazy="joined": sala, filme e cinema vêm na MESMA consulta da sessão (JOIN)
-# - lazy="selectin": os ingressos de um pedido vêm numa consulta extra
-
 
 def agora() -> datetime:
     return datetime.now(timezone.utc)
@@ -40,7 +35,7 @@ class Sala(Base):
     nome: Mapped[str]
     capacidade: Mapped[int]
 
-    cinema: Mapped[Cinema] = relationship(lazy="joined")
+    cinema: Mapped[Cinema] = relationship()
 
 
 class Sessao(Base):
@@ -52,8 +47,8 @@ class Sessao(Base):
     inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     preco_inteira_centavos: Mapped[int]
 
-    filme: Mapped[Filme] = relationship(lazy="joined")
-    sala: Mapped[Sala] = relationship(lazy="joined")
+    filme: Mapped[Filme] = relationship()
+    sala: Mapped[Sala] = relationship()
 
     @property
     def preco_meia_centavos(self) -> int:
@@ -81,7 +76,7 @@ class Pedido(Base):
     cobranca_id: Mapped[str | None]
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
-    ingressos: Mapped[list["Ingresso"]] = relationship(back_populates="pedido", lazy="selectin")
+    ingressos: Mapped[list["Ingresso"]] = relationship(back_populates="pedido")
 
 
 class Ingresso(Base):
