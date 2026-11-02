@@ -84,6 +84,7 @@ async def cobrar(nova: NovaCobranca, idempotency_key: str | None = Header(defaul
 
     if random.random() < config.taxa_travamento:
         await asyncio.sleep(3600)
+        raise HTTPException(504, "Cobrança travada, nada foi cobrado")
 
     await asyncio.sleep(com_variacao(config.latencia_ms))
 

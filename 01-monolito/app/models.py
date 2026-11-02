@@ -63,7 +63,7 @@ class Pedido(Base):
     nome: Mapped[str]
     cpf: Mapped[str] = mapped_column(String(11))
     email: Mapped[str]
-    # reservando -> aguardando_pagamento -> confirmado | pagamento_recusado | cancelado
+    # reservando -> aguardando_pagamento -> confirmado | pagamento_recusado | pagamento_falhou | cancelado
     status: Mapped[str]
     subtotal_centavos: Mapped[int]
     taxa_centavos: Mapped[int]

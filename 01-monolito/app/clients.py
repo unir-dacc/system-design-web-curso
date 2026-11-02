@@ -51,10 +51,36 @@ def cancelar_reserva(reserva_id: str) -> None:
 # --- Gateway de pagamento ---
 
 
+# A cobrança tem timeout: sem ele, um gateway travado prenderia o assento para sempre.
+TIMEOUT_GATEWAY_S = 10
+
+
+class PagamentoNaoRealizado(Exception):
+    """O gateway falhou e confirmou que nada foi cobrado."""
+
+
 def cobrar(valor_centavos: int, cartao_token: str, referencia: str) -> dict:
-    resposta = http.post(
-        f"{GATEWAY_URL}/cobrancas",
-        json={"valor_centavos": valor_centavos, "cartao_token": cartao_token, "referencia": referencia},
-    )
+    try:
+        resposta = http.post(
+            f"{GATEWAY_URL}/cobrancas",
+            json={"valor_centavos": valor_centavos, "cartao_token": cartao_token, "referencia": referencia},
+            # Se a mesma cobrança for enviada de novo, o gateway não cobra duas vezes
+            headers={"Idempotency-Key": referencia},
+            timeout=TIMEOUT_GATEWAY_S,
+        )
+        resposta.raise_for_status()
+        return resposta.json()
+    except httpx.HTTPError:
+        # Erro ou timeout: a cobrança pode ter acontecido ou não.
+        # Antes de liberar o assento, pergunta ao gateway.
+        cobranca = buscar_cobranca(referencia)
+        if cobranca is None:
+            raise PagamentoNaoRealizado()
+        return cobranca
+
+
+def buscar_cobranca(referencia: str) -> dict | None:
+    resposta = http.get(f"{GATEWAY_URL}/cobrancas", params={"referencia": referencia}, timeout=TIMEOUT_GATEWAY_S)
     resposta.raise_for_status()
-    return resposta.json()
+    cobrancas = resposta.json()
+    return cobrancas[0] if cobrancas else None

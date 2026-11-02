@@ -25,6 +25,14 @@ def criar_pedido(dados: CriarPedido, db: Session = Depends(get_db)):
             status_code=402,
             content={"detail": "Pagamento recusado", "pedido": PedidoOut.model_validate(erro.pedido).model_dump(mode="json")},
         )
+    except compra.FalhaNoPagamento as erro:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Não foi possível falar com o gateway de pagamento. Nada foi cobrado, tente de novo.",
+                "pedido": PedidoOut.model_validate(erro.pedido).model_dump(mode="json"),
+            },
+        )
     return PedidoOut.model_validate(pedido)
 
 

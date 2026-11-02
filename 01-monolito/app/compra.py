@@ -33,6 +33,12 @@ class PagamentoRecusado(Exception):
         self.pedido = pedido
 
 
+class FalhaNoPagamento(Exception):
+    def __init__(self, pedido: Pedido):
+        super().__init__("Falha no gateway de pagamento")
+        self.pedido = pedido
+
+
 def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     sessao = db.get(Sessao, dados.sessao_id)
     if sessao is None:
@@ -62,8 +68,14 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
 
     # 3. Cobra no gateway de pagamento (lento)
     # ⚠️ PROPOSITAL: o cliente fica esperando o pagamento com a requisição aberta.
-    # ⚠️ PROPOSITAL: se o gateway falhar aqui, a reserva fica presa até expirar.
-    cobranca = clients.cobrar(pedido.total_centavos, dados.cartao_token, referencia=f"pedido-{pedido.id}")
+    try:
+        cobranca = clients.cobrar(pedido.total_centavos, dados.cartao_token, referencia=f"pedido-{pedido.id}")
+    except clients.PagamentoNaoRealizado:
+        # Nada foi cobrado: libera o assento e o pedido deixa de contar para o limite
+        clients.cancelar_reserva(pedido.reserva_id)
+        pedido.status = "pagamento_falhou"
+        db.commit()
+        raise FalhaNoPagamento(pedido)
     pedido.cobranca_id = cobranca["id"]
 
     if cobranca["status"] != "aprovada":

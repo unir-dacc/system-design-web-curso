@@ -264,6 +264,7 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
       const situacao = p.status === 200 ? p.json('status') : null;
       if (situacao === 'confirmado') status = 201;
       if (situacao === 'pagamento_recusado' || situacao === 'cancelado') status = 402;
+      if (situacao === 'pagamento_falhou') status = 503;
       if (status !== 0) break;
     }
     duracao = Date.now() - inicio;

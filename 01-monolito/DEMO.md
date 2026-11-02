@@ -164,9 +164,15 @@ docker compose run --rm --service-ports k6 run -e USUARIOS=3 /scripts/estreia.js
 curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 1200}'
 ```
 
-Experimente também `{"taxa_travamento": 0.2}`: algumas cobranças nunca respondem.
+Experimente também `{"taxa_travamento": 0.2}`: algumas cobranças nunca respondem. E `{"taxa_erro": 0.3}`: o gateway responde com erro.
+
+👉 **Observe:** o que acontece com o assento e com o pedido de uma compra cujo pagamento falhou (mapa da sessão e `GET /pedidos/{id}`).
 
 Pergunta: *"um sistema que não é nosso pode derrubar o nosso?"*
+
+Abra `cobrar` em `app/clients.py`.
+
+Pergunta: *"se o gateway não respondeu, o cliente foi cobrado ou não? Por que não dá para simplesmente liberar o assento?"*
 
 ---
 
