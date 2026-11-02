@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.banco import codigo_do_link
 from app.config import ENDERECO_PUBLICO, TAMANHO_MAXIMO_DA_URL
 from app.db import get_db
 
@@ -40,11 +41,10 @@ class EstatisticasOut(BaseModel):
 
 @router.post("/links", status_code=201, response_model=LinkOut)
 def criar_link(dados: CriarLink, db: Session = Depends(get_db)):
-    # O código sai do próximo número da sequência (app/banco.py): único por construção
-    codigo = db.scalar(
-        text("INSERT INTO links (id, codigo, url) SELECT n, codigo_curto(n), :url FROM nextval('links_id_seq') AS n RETURNING codigo"),
-        {"url": dados.url},
-    )
+    # O código sai do próximo número da sequência, codificado pelo Sqids (app/banco.py): único por construção
+    id_do_link = db.scalar(text("SELECT nextval('links_id_seq')"))
+    codigo = codigo_do_link(id_do_link)
+    db.execute(text("INSERT INTO links (id, codigo, url) VALUES (:id, :codigo, :url)"), {"id": id_do_link, "codigo": codigo, "url": dados.url})
     db.commit()
     return LinkOut(codigo=codigo, url=dados.url, link_curto=f"{ENDERECO_PUBLICO}/{codigo}")
 

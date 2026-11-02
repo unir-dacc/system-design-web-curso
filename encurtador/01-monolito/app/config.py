@@ -9,3 +9,8 @@ LINKS_INICIAIS = int(os.getenv("LINKS_INICIAIS", "1000000"))
 ENDERECO_PUBLICO = os.getenv("ENDERECO_PUBLICO", "http://localhost:8000")
 
 TAMANHO_MAXIMO_DA_URL = 2048
+
+# O código curto: o número do link codificado pelo Sqids (app/banco.py), com
+# este alfabeto embaralhado (base 62: 0-9, a-z, A-Z) e pelo menos 7 caracteres
+ALFABETO_DOS_CODIGOS = "Fs3Kd9QmZr1xVbT7nWc0LpY5gHj2Ek8qPa6NtUoXlRiz4GwDySCfvMeJAhOuIB"
+TAMANHO_DO_CODIGO = 7

@@ -34,8 +34,8 @@ docker compose down -v                                           # derruba e apa
 | `GET /links/{codigo}/estatisticas` | quantos cliques o link teve |
 
 O código curto tem 7 caracteres em base 62 (`0-9`, `a-z`, `A-Z`) e vem do número
-do link, embaralhado: nunca se repete e não dá para adivinhar os links dos
-outros contando 1, 2, 3...
+do link, codificado pelo [Sqids](https://sqids.org), uma biblioteca muito usada para isso:
+nunca se repete e não dá para adivinhar os links dos outros contando 1, 2, 3...
 
 Na primeira subida, o encurtador cria **1 milhão de links** (para mudar:
 `LINKS_INICIAIS=500000 docker compose up -d`).

@@ -20,7 +20,7 @@ docker compose down -v          # garante que começa do zero
 docker compose up -d --build --wait
 ```
 
-A primeira subida cria 1 milhão de links e leva alguns segundos.
+A primeira subida cria 1 milhão de links e leva cerca de um minuto.
 Deixe abertas duas abas: http://localhost:8000/docs e um terminal com `docker compose stats`.
 
 ---
@@ -29,7 +29,7 @@ Deixe abertas duas abas: http://localhost:8000/docs e um terminal com `docker co
 
 | Arquivo | O que mostrar |
 |---------|---------------|
-| `app/banco.py` | A tabela `links` e como o código curto nasce do número do link. Por que dois links nunca recebem o mesmo código? |
+| `app/banco.py` | A tabela `links` e como o código curto nasce do número do link, com o Sqids. Por que dois links nunca recebem o mesmo código? E por que não usar o próprio número? |
 | `app/routes/links.py` | Criar, redirecionar, estatísticas. O redirecionamento acha o link e conta o clique numa instrução só |
 | `app/main.py` | Por que a rota `/{codigo}` fica por último? |
 
