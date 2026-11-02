@@ -53,7 +53,7 @@ git diff --no-index ../01-monolito/docker-compose.yml docker-compose.yml
 
 | Arquivo | O que mostrar |
 |---------|---------------|
-| `app/cache.py` | O padrão *cache-aside*: procura no Redis; se não achar, busca no cinema e guarda por alguns segundos |
+| `app/cache.py` | Procura o mapa no Redis. Se a cópia venceu, **só uma requisição** vai ao cinema buscar outra (trava no Redis) e as demais recebem a cópia anterior |
 | `app/routes/catalogo.py` | A rota do mapa agora passa pelo cache |
 | `app/routes/admin.py` | O reset do teste também limpa o cache |
 | `docker-compose.yml` | O Redis entrou, com seu próprio limite de CPU e memória |
@@ -72,11 +72,13 @@ Espie dentro do Redis:
 
 ```bash
 docker compose exec redis redis-cli KEYS 'mapa:*'
-docker compose exec redis redis-cli TTL mapa:1       # quantos segundos faltam para expirar
+docker compose exec redis redis-cli GET mapa:1 | head -c 80; echo   # a cópia e a hora em que foi buscada
 docker compose exec redis redis-cli INFO stats | grep keyspace
 ```
 
 Pergunta: *"o que significam `keyspace_hits` e `keyspace_misses`?"*
+
+Pergunta: *"quando a cópia de uma sessão vence e 100 pessoas abrem o mapa no mesmo instante, quantas vezes o cinema é chamado? Procure a resposta em `app/cache.py`."*
 
 ## 4. A estreia
 

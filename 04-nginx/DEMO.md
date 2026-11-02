@@ -88,9 +88,9 @@ LIMITE_COMPRAS_POR_S=20 docker compose up -d nginx
 LIMITE_COMPRAS_POR_S=8 docker compose up -d nginx      # volta ao padrão
 ```
 
-## 5. Investigando o pico
+## 5. Quem trabalhou no pico
 
-O pico ainda não ficou bom. Depois da estreia, pergunte ao cinema quantas vezes ele foi chamado e ao Redis quantas vezes o mapa não estava guardado:
+Depois da estreia, pergunte ao cinema quantas vezes ele foi chamado e ao Redis quantas vezes o mapa não estava guardado:
 
 ```bash
 curl -s localhost:8002/admin/estado | grep -o '"fila":{[^}]*}'
@@ -99,7 +99,7 @@ docker compose exec redis redis-cli INFO stats | grep keyspace
 
 Pergunta: *"o mapa de cada sessão fica guardado por 5 segundos. Quantas vezes o cinema deveria ter sido chamado para mostrar mapas? Quantas vezes foi?"*
 
-Pergunta: *"o que acontece no instante em que o mapa de uma sessão expira e 100 pessoas pedem esse mapa ao mesmo tempo?"*
+Pergunta: *"o que acontece no instante em que a cópia do mapa de uma sessão vence e 100 pessoas pedem esse mapa ao mesmo tempo?"* (dica: `app/cache.py`)
 
 ---
 
