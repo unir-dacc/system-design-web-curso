@@ -1,0 +1,51 @@
+# O Nginx fica na frente do Ingressa: recebe todas as conexões e controla
+# quantas requisições por segundo chegam até ele.
+#
+# ${LIMITE_COMPRAS_POR_S} e ${LIMITE_MAPAS_POR_S} vêm do docker-compose.yml.
+
+# Uma única "porta" para o site inteiro: no máximo LIMITE_COMPRAS_POR_S compras
+# por segundo, somando todos os usuários.
+limit_req_zone $server_name zone=compras:1m rate=${LIMITE_COMPRAS_POR_S}r/s;
+# O mapa vem do cache, mas montar o JSON de 400 assentos ainda custa CPU do
+# Ingressa: ele também precisa de um limite.
+limit_req_zone $server_name zone=mapas:1m rate=${LIMITE_MAPAS_POR_S}r/s;
+limit_req_status 429;
+
+upstream ingressa {
+    server ingressa:8000;
+    keepalive 64;
+}
+
+server {
+    listen 80;
+    server_name ingressa;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+
+    # O Ingressa não tem timeout nas chamadas externas; o Nginx também espera
+    # para não mudar esse comportamento.
+    proxy_read_timeout 600s;
+
+    location = /pedidos {
+        limit_req zone=compras burst=${LIMITE_COMPRAS_POR_S} nodelay;
+        error_page 429 = @muita_gente;
+        proxy_pass http://ingressa;
+    }
+
+    location ~ ^/sessoes/[0-9]+/assentos$ {
+        limit_req zone=mapas burst=${LIMITE_MAPAS_POR_S} nodelay;
+        error_page 429 = @muita_gente;
+        proxy_pass http://ingressa;
+    }
+
+    location / {
+        proxy_pass http://ingressa;
+    }
+
+    location @muita_gente {
+        default_type application/json;
+        return 429 '{"detail": "Muita gente comprando agora. Tente de novo em instantes."}';
+    }
+}
