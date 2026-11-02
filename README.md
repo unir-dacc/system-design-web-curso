@@ -96,14 +96,14 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
    ganha hardware novo: ela divide o orçamento com as outras. Cada etapa mostra a divisão
    no topo do seu compose. Os ganhos vêm da arquitetura, nunca de máquina maior.
 3. **Cada medição começa do zero**: os testes de carga limpam o estado antes de rodar.
-4. **O gerador de carga (k6) roda num container separado**, com até 4 CPUs, fora do orçamento.
+4. **O gerador de carga (k6) roda num container separado**, sem limite de CPU, fora do orçamento.
 
 | Componente | CPU | Memória | Observação |
 |------------|-----|---------|------------|
 | gateway-pagamento | 0.5 | 128 MB | **lento**: ~1,2 s por cobrança, 5% recusa |
 | sistema-cinema | 2 | 256 MB | **rápido**: mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms, até 200 atendimentos simultâneos |
 | mailpit | 0.25 | 128 MB | SMTP falso, UI em :8025 |
-| k6 | 4 | — | gerador de carga |
+| k6 | sem limite | — | gerador de carga |
 
 ## Simuladores: mudando o comportamento ao vivo
 

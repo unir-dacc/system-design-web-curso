@@ -98,7 +98,3 @@ services:
       K6_WEB_DASHBOARD_PERIOD: 2s
       # Avisos de requisições que falharam vão para um arquivo, não para a tela
       K6_LOG_OUTPUT: file=/relatorios/k6.log
-    deploy:
-      resources:
-        limits:
-          cpus: "4.0"

@@ -43,6 +43,7 @@ server {
 
     # A sala de espera: entrar e perguntar a vez custam pouco (um contador no Redis)
     location ~ ^/sala(/[0-9]+)?$ {
+        error_page 429 = @sala_cheia;
         limit_conn sala ${MAX_SALA_SIMULTANEOS};
         proxy_pass http://ingressa;
     }
@@ -75,6 +76,14 @@ server {
     location / {
         limit_conn outros ${MAX_OUTROS_SIMULTANEOS};
         proxy_pass http://ingressa;
+    }
+
+    # A própria sala cheia: quem espera volta mais tarde, para não virar uma
+    # tempestade de perguntas (com 600 chegadas por segundo, voltar em 2 s não dá)
+    location @sala_cheia {
+        default_type application/json;
+        add_header Retry-After 10 always;
+        return 429 '{"detail": "A sala de espera está cheia. Tente de novo em instantes."}';
     }
 
     location @muita_gente {
