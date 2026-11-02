@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import cache
 from app.db import get_db
 
 # Rota de apoio às aulas: os testes de carga chamam antes de começar, para que
@@ -13,4 +14,5 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 async def reset(db: AsyncSession = Depends(get_db)):
     await db.execute(text("TRUNCATE ingressos, pedidos RESTART IDENTITY"))
     await db.commit()
-    return {"status": "pedidos e ingressos apagados"}
+    await cache.limpar()
+    return {"status": "pedidos, ingressos e cache apagados"}

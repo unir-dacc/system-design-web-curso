@@ -7,6 +7,11 @@ GATEWAY_URL = os.getenv("GATEWAY_URL", "http://gateway-pagamento:8000")
 SMTP_HOST = os.getenv("SMTP_HOST", "mailpit")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "1025"))
 SEED_PATH = os.getenv("SEED_PATH", "/seed/catalogo.json")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+# Por quanto tempo cada resposta fica guardada no cache
+PROGRAMACAO_TTL_S = int(os.getenv("PROGRAMACAO_TTL_S", "60"))  # muda pouco
+MAPA_TTL_S = int(os.getenv("MAPA_TTL_S", "5"))  # também é apagado a cada compra
 
 # Horários são exibidos no fuso das sessões do catálogo
 FUSO_HORARIO = timezone(timedelta(hours=-4))

@@ -17,7 +17,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clients, notificacoes
+from app import cache, clients, notificacoes
 from app.config import COTA_MEIA_ENTRADA_PCT, LIMITE_INGRESSOS_POR_CPF, TAXA_CONVENIENCIA_PCT
 from app.db import SessionLocal
 from app.models import Ingresso, Pedido, Sessao
@@ -65,6 +65,7 @@ async def realizar_compra(db: AsyncSession, dados: CriarPedido) -> Pedido:
         await db.commit()
         raise
     pedido.status = "aguardando_pagamento"
+    await mapa_mudou(sessao.id)
     await db.commit()
 
     # 3. O resto continua em segundo plano; o cliente recebe o pedido agora.
@@ -92,6 +93,7 @@ async def concluir_compra(pedido_id: int, cartao_token: str, itens: list[tuple[s
             except clients.PagamentoNaoRealizado:
                 # Nada foi cobrado: libera o assento e o pedido deixa de contar para o limite
                 await clients.cancelar_reserva(pedido.reserva_id)
+                await mapa_mudou(sessao.id)
                 pedido.status = "pagamento_falhou"
                 await db.commit()
                 return
@@ -99,12 +101,14 @@ async def concluir_compra(pedido_id: int, cartao_token: str, itens: list[tuple[s
 
             if cobranca["status"] != "aprovada":
                 await clients.cancelar_reserva(pedido.reserva_id)
+                await mapa_mudou(sessao.id)
                 pedido.status = "pagamento_recusado"
                 await db.commit()
                 return
 
             # 5. Confirma a venda no cinema
             await clients.confirmar_reserva(pedido.reserva_id)
+            await mapa_mudou(sessao.id)
 
             # 6. Emite os ingressos
             for assento, tipo, preco in itens:
@@ -122,6 +126,11 @@ async def concluir_compra(pedido_id: int, cartao_token: str, itens: list[tuple[s
             await asyncio.to_thread(notificacoes.enviar_confirmacao, pedido, sessao)
     except Exception:
         log.exception("Falha ao concluir a compra do pedido %s", pedido_id)
+
+
+async def mapa_mudou(sessao_id: int) -> None:
+    """Os assentos da sessão mudaram: a cópia do mapa no cache ficou velha."""
+    await cache.esquecer(cache.chave_do_mapa(sessao_id))
 
 
 async def registrar_pedido(
