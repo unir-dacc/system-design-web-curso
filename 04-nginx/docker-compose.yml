@@ -52,8 +52,8 @@ services:
     # Sem porta publicada: só o Nginx fala com o Ingressa
     environment:
       # Tempo de vida do mapa no cache. Para testar outro valor:
-      #   MAPA_TTL_S=30 docker compose up -d ingressa
-      MAPA_TTL_S: ${MAPA_TTL_S:-5}
+      #   MAPA_TTL_S=5 docker compose up -d ingressa
+      MAPA_TTL_S: ${MAPA_TTL_S:-30}
     volumes:
       - ../shared/seed:/seed:ro
     depends_on:

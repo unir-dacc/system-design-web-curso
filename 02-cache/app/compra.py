@@ -10,6 +10,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import assentos as assentos_do_ingressa
 from app import clients, notificacoes
 from app.config import COTA_MEIA_ENTRADA_PCT, LIMITE_INGRESSOS_POR_CPF, TAXA_CONVENIENCIA_PCT
 from app.models import Ingresso, Pedido, Sessao
@@ -50,17 +51,27 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     # 1. Confere as regras e registra o pedido, tudo de uma vez
     pedido = registrar_pedido(db, sessao, dados, len(assentos), qtd_meia, subtotal, taxa)
 
-    # 2. Segura os assentos no sistema do cinema (lento)
+    # 2. Trava os assentos no Ingressa: se alguém já pegou algum deles, a
+    # resposta sai agora, sem gastar um atendimento do sistema do cinema
+    dono = f"pedido-{pedido.id}"
+    ocupados = assentos_do_ingressa.travar(sessao.id, assentos, dono)
+    if ocupados:
+        pedido.status = "cancelado"  # deixa de contar para o limite
+        db.commit()
+        raise clients.AssentosIndisponiveis(ocupados)
+
+    # 3. Segura os assentos no sistema do cinema (lento)
     try:
         pedido.reserva_id = clients.reservar_assentos(sessao.id, assentos)
     except Exception:
-        pedido.status = "cancelado"  # deixa de contar para o limite
+        assentos_do_ingressa.soltar(sessao.id, assentos, dono)
+        pedido.status = "cancelado"
         db.commit()
         raise
     pedido.status = "aguardando_pagamento"
     db.commit()
 
-    # 3. Cobra no gateway de pagamento (lento)
+    # 4. Cobra no gateway de pagamento (lento)
     # ⚠️ PROPOSITAL: o cliente fica esperando o pagamento com a requisição aberta.
     # ⚠️ PROPOSITAL: se o gateway falhar aqui, a reserva fica presa até expirar.
     cobranca = clients.cobrar(pedido.total_centavos, dados.cartao_token, referencia=f"pedido-{pedido.id}")
@@ -68,14 +79,16 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
 
     if cobranca["status"] != "aprovada":
         clients.cancelar_reserva(pedido.reserva_id)
+        assentos_do_ingressa.soltar(sessao.id, assentos, dono)
         pedido.status = "pagamento_recusado"
         db.commit()
         raise PagamentoRecusado(pedido)
 
-    # 4. Confirma a venda no cinema (lento)
+    # 5. Confirma a venda no cinema (lento)
     clients.confirmar_reserva(pedido.reserva_id)
+    assentos_do_ingressa.marcar_vendidos(sessao.id, assentos, dono)
 
-    # 5. Emite os ingressos
+    # 6. Emite os ingressos
     for item, preco in zip(dados.itens, precos):
         pedido.ingressos.append(
             Ingresso(
@@ -89,7 +102,7 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     pedido.status = "confirmado"
     db.commit()
 
-    # 6. Envia o e-mail com os QR codes
+    # 7. Envia o e-mail com os QR codes
     # ⚠️ PROPOSITAL: gerar imagens e falar com o SMTP dentro da requisição.
     notificacoes.enviar_confirmacao(pedido, sessao)
 

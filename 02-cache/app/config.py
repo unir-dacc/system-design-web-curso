@@ -9,8 +9,9 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "1025"))
 SEED_PATH = os.getenv("SEED_PATH", "/seed/catalogo.json")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
-# Por quanto tempo o mapa de assentos fica guardado no cache
-MAPA_TTL_S = int(os.getenv("MAPA_TTL_S", "5"))
+# Por quanto tempo a cópia do mapa do cinema fica guardada. Pode ser longo: o
+# Ingressa completa a cópia com as próprias travas e vendas (app/assentos.py)
+MAPA_TTL_S = int(os.getenv("MAPA_TTL_S", "30"))
 
 # Horários são exibidos no fuso das sessões do catálogo
 FUSO_HORARIO = timezone(timedelta(hours=-4))

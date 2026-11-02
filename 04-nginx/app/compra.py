@@ -17,6 +17,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import assentos as assentos_do_ingressa
 from app import clients, notificacoes
 from app.config import COTA_MEIA_ENTRADA_PCT, LIMITE_INGRESSOS_POR_CPF, TAXA_CONVENIENCIA_PCT
 from app.db import SessionLocal
@@ -57,17 +58,27 @@ async def realizar_compra(db: AsyncSession, dados: CriarPedido) -> Pedido:
     # 1. Confere as regras e registra o pedido, tudo de uma vez
     pedido = await registrar_pedido(db, sessao, dados, len(assentos), qtd_meia, subtotal, taxa)
 
-    # 2. Segura os assentos no sistema do cinema (lento)
+    # 2. Trava os assentos no Ingressa: se alguém já pegou algum deles, a
+    # resposta sai agora, sem gastar um atendimento do sistema do cinema
+    dono = f"pedido-{pedido.id}"
+    ocupados = await assentos_do_ingressa.travar(sessao.id, assentos, dono)
+    if ocupados:
+        pedido.status = "cancelado"  # deixa de contar para o limite
+        await db.commit()
+        raise clients.AssentosIndisponiveis(ocupados)
+
+    # 3. Segura os assentos no sistema do cinema (lento)
     try:
         pedido.reserva_id = await clients.reservar_assentos(sessao.id, assentos)
     except Exception:
-        pedido.status = "cancelado"  # deixa de contar para o limite
+        await assentos_do_ingressa.soltar(sessao.id, assentos, dono)
+        pedido.status = "cancelado"
         await db.commit()
         raise
     pedido.status = "aguardando_pagamento"
     await db.commit()
 
-    # 3. O resto continua em segundo plano; o cliente recebe o pedido agora.
+    # 4. O resto continua em segundo plano; o cliente recebe o pedido agora.
     # ⚠️ PROPOSITAL: a tarefa vive na memória deste processo. Se ele cair, os
     # pagamentos em andamento se perdem e os pedidos ficam "aguardando_pagamento".
     itens = [(item.assento.upper(), item.tipo, preco) for item, preco in zip(dados.itens, precos)]
@@ -88,14 +99,17 @@ async def concluir_compra(pedido_id: int, cartao_token: str, itens: list[tuple[s
             cobranca = await clients.cobrar(pedido.total_centavos, cartao_token, referencia=f"pedido-{pedido.id}")
             pedido.cobranca_id = cobranca["id"]
 
+            codigos = [assento for assento, _, _ in itens]
             if cobranca["status"] != "aprovada":
                 await clients.cancelar_reserva(pedido.reserva_id)
+                await assentos_do_ingressa.soltar(sessao.id, codigos, f"pedido-{pedido.id}")
                 pedido.status = "pagamento_recusado"
                 await db.commit()
                 return
 
             # Confirma a venda no cinema (lento)
             await clients.confirmar_reserva(pedido.reserva_id)
+            await assentos_do_ingressa.marcar_vendidos(sessao.id, codigos, f"pedido-{pedido.id}")
 
             # Emite os ingressos
             for assento, tipo, preco in itens:

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import assentos as assentos_do_ingressa
 from app import cache
 from app.config import COTA_MEIA_ENTRADA_PCT, FUSO_HORARIO
 from app.db import SessionLocal, get_db
@@ -58,7 +59,8 @@ async def mapa_de_assentos(sessao_id: int):
     # antes de esperar o cache (ou o cinema, se o mapa não estiver guardado).
     async with SessionLocal() as db:
         await buscar_sessao(db, sessao_id)
-    assentos = await cache.mapa_de_assentos(sessao_id)
+    # A cópia do cinema pode estar atrasada; as travas e vendas do próprio Ingressa não
+    assentos = await assentos_do_ingressa.aplicar_ao_mapa(sessao_id, await cache.mapa_de_assentos(sessao_id))
     return MapaDeAssentosOut(
         sessao_id=sessao_id,
         livres=sum(1 for a in assentos if a["status"] == "livre"),

@@ -54,9 +54,13 @@ git diff --no-index ../01-monolito/docker-compose.yml docker-compose.yml
 | Arquivo | O que mostrar |
 |---------|---------------|
 | `app/cache.py` | Procura o mapa no Redis. Se a cópia venceu, **só uma requisição** vai ao cinema buscar outra (trava no Redis) e as demais recebem a cópia anterior |
-| `app/routes/catalogo.py` | A rota do mapa agora passa pelo cache |
-| `app/routes/admin.py` | O reset do teste também limpa o cache |
+| `app/assentos.py` | O Ingressa guarda no Redis os assentos que ele mesmo travou e vendeu. Antes de pedir uma reserva ao cinema, a compra trava os assentos aqui: tudo ou nada |
+| `app/compra.py` | O passo novo: travar os assentos no Ingressa antes de chamar o cinema |
+| `app/routes/catalogo.py` | O mapa: a cópia do cinema combinada com as travas e vendas do Ingressa |
+| `app/routes/admin.py` | O reset do teste também limpa o Redis |
 | `docker-compose.yml` | O Redis entrou, com seu próprio limite de CPU e memória |
+
+Pergunta: *"o Redis não grava nada em disco. Se ele reiniciar no meio da estreia, algum assento pode ser vendido duas vezes? E o limite por CPF?"*
 
 ## 3. O cache funcionando
 
@@ -103,34 +107,35 @@ docker compose exec redis redis-cli INFO stats | grep keyspace
 
 ## 5. O preço do cache
 
-O mapa guardado pode estar alguns segundos atrasado. Use a sessão 3, que o teste de carga não usa:
+As compras feitas pelo Ingressa aparecem no mapa na hora. Mas o cinema também vende na bilheteria, e isso o Ingressa só fica sabendo quando a cópia do mapa é renovada. Use a sessão 3, que o teste de carga não usa:
 
 ```bash
-# 1. guarda o mapa no cache
+# 1. guarda a cópia do mapa
 curl -s localhost:8000/sessoes/3/assentos | grep -o '"codigo":"J15","status":"[a-z]*"'
 
-# 2. compra o assento J15
+# 2. a bilheteria do cinema reserva o J15 direto no sistema do cinema
+curl -s -X POST localhost:8002/sessoes/3/reservas -H 'Content-Type: application/json' -d '{"assentos": ["J15"]}' -o /dev/null -w 'bilheteria: %{http_code}\n'
+
+# 3. o mapa do Ingressa ainda não sabe
+curl -s localhost:8000/sessoes/3/assentos | grep -o '"codigo":"J15","status":"[a-z]*"'
+
+# 4. um usuário tenta comprar o J15 pelo Ingressa
 curl -s -X POST localhost:8000/pedidos -H 'Content-Type: application/json' -d '{
   "sessao_id": 3, "nome": "Maria", "cpf": "529.982.247-25", "email": "maria@exemplo.com",
   "cartao_token": "tok_aprovado", "itens": [{"assento": "J15"}]
-}' -o /dev/null -w 'compra: %{http_code}\n'
-
-# 3. abre o mapa logo em seguida... e de novo depois de alguns segundos
-curl -s localhost:8000/sessoes/3/assentos | grep -o '"codigo":"J15","status":"[a-z]*"'
-sleep 5
-curl -s localhost:8000/sessoes/3/assentos | grep -o '"codigo":"J15","status":"[a-z]*"'
+}' -w '\ncompra: %{http_code}\n'
 ```
 
-👉 **Observe:** o status do J15 nas duas últimas consultas. (Se o J15 já tiver sido vendido numa demonstração anterior, use outro assento, como J14.)
+👉 **Observe:** o status do J15 no mapa do Ingressa e a resposta da compra. (Se o J15 já tiver sido usado numa demonstração anterior, use outro assento, como J14.)
 
-Pergunta: *"e se outro usuário tentar comprar o J15 nesse intervalo? Quem impede a venda dupla?"*
+Pergunta: *"quem impediu a venda dupla, se o Ingressa achava que o assento estava livre?"*
 
-Experimente outros tempos de vida do cache e rode a estreia de novo:
+Experimente outros tempos de vida da cópia do mapa e rode a estreia de novo:
 
 ```bash
-MAPA_TTL_S=1 docker compose up -d ingressa      # cache quase sempre vazio
-MAPA_TTL_S=60 docker compose up -d ingressa     # mapa bem desatualizado
-MAPA_TTL_S=5 docker compose up -d ingressa      # volta ao padrão
+MAPA_TTL_S=1 docker compose up -d ingressa      # cópia quase sempre vencida
+MAPA_TTL_S=300 docker compose up -d ingressa    # cópia muito antiga
+MAPA_TTL_S=30 docker compose up -d ingressa     # volta ao padrão
 ```
 
 Pergunta: *"qual é o tempo de vida certo? O que se ganha e o que se perde em cada extremo?"*

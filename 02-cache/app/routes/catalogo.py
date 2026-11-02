@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import assentos as assentos_do_ingressa
 from app import cache
 from app.config import COTA_MEIA_ENTRADA_PCT, FUSO_HORARIO
 from app.db import get_db
@@ -57,7 +58,8 @@ def detalhar_sessao(sessao_id: int, db: Session = Depends(get_db)):
 @router.get("/sessoes/{sessao_id}/assentos", response_model=MapaDeAssentosOut)
 def mapa_de_assentos(sessao_id: int, db: Session = Depends(get_db)):
     buscar_sessao(db, sessao_id)
-    assentos = cache.mapa_de_assentos(sessao_id)
+    # A cópia do cinema pode estar atrasada; as travas e vendas do próprio Ingressa não
+    assentos = assentos_do_ingressa.aplicar_ao_mapa(sessao_id, cache.mapa_de_assentos(sessao_id))
     return MapaDeAssentosOut(
         sessao_id=sessao_id,
         livres=sum(1 for a in assentos if a["status"] == "livre"),
