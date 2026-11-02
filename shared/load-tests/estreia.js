@@ -212,8 +212,16 @@ function gerarCpf() {
   return d.join('');
 }
 
+// Sorteia `quantidade` itens diferentes, todos com a mesma chance (Fisher-Yates).
+// Não use sort(() => Math.random() - 0.5): ele favorece os primeiros da lista.
 function sortear(lista, quantidade = 1) {
-  return [...lista].sort(() => Math.random() - 0.5).slice(0, quantidade);
+  const copia = [...lista];
+  const n = Math.min(quantidade, copia.length);
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(Math.random() * (copia.length - i));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia.slice(0, n);
 }
 
 function souUsuarioComum() {
