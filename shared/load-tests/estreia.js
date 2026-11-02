@@ -33,16 +33,17 @@ const GATEWAY = 'http://gateway-pagamento:8000';
 const ETAPA = __ENV.ETAPA || 'Ingressa';
 
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
-// rodada atual com o último resumo salvo de cada uma das outras etapas.
+// rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
+// fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
 const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx'];
-const OUTRAS_ETAPAS = new SharedArray('outras etapas', () =>
+const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
       return [JSON.parse(open(`/curso/${pasta}/relatorios/estreia.json`))];
     } catch (e) {
       return []; // essa etapa ainda não rodou o teste
     }
-  }).filter((resumo) => resumo.etapa !== ETAPA),
+  }).filter((resumo) => resumo.etapa.localeCompare(ETAPA) < 0), // "Etapa 01 · ..." vem antes de "Etapa 02 · ..."
 );
 
 // O pico
@@ -802,7 +803,7 @@ ${tabelaDeEndpoints(r.endpoints.pico)}
   METAS DO PICO
 ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
 ${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
-  3. COMPARAÇÃO COM AS OUTRAS ETAPAS (último resultado de cada uma)
+  3. COMPARAÇÃO COM AS ETAPAS ANTERIORES (último resultado de cada uma)
 
       etapa                     aguenta   curiosos  compradores  compras/s   no fim
                                           no pico     no pico     no pico
@@ -823,7 +824,7 @@ export function handleSummary(data) {
   }
   const resultado = calcularResultado(data);
   const resumo = resumir(resultado);
-  resultado.comparacao = [...OUTRAS_ETAPAS, { ...resumo, atual: true }].sort((a, b) => a.etapa.localeCompare(b.etapa));
+  resultado.comparacao = [...ETAPAS_ANTERIORES, { ...resumo, atual: true }].sort((a, b) => a.etapa.localeCompare(b.etapa));
   return {
     stdout: gerarTexto(resultado),
     '/relatorios/estreia.txt': gerarTexto(resultado),

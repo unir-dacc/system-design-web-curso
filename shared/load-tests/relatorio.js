@@ -363,7 +363,7 @@ export function gerarHtml(r) {
   <div class="bloco" style="margin-top:14px">${tabelaDaProgressao(r.progressao)}</div>
 
   <h2>O ganho de cada etapa</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa. Todas com o mesmo hardware: 2 CPUs e 2 GB para o Ingressa.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa anterior. Todas com o mesmo hardware: 2 CPUs e 2 GB para o Ingressa.</p>
   <div class="bloco">${comparacao(r.comparacao)}</div>
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
