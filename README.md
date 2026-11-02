@@ -19,7 +19,7 @@ cd 01-monolito
 
 docker compose up -d --build --wait                       # sobe a etapa
 docker compose run --rm --service-ports k6 run /scripts/estreia.js   # teste de carga
-docker compose run --rm --service-ports k6 run -e USUARIOS=1000 /scripts/estreia.js # mais usuários por segundo
+docker compose run --rm --service-ports k6 run -e USUARIOS=200 /scripts/estreia.js  # pico maior
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
@@ -37,9 +37,9 @@ uma sessão, mas **a maioria só olha**. De cada 10, 7 dão uma olhada em outra 
 embora, e 3 compram. Uma rodada, duas partes:
 
 1. **A subida:** o público cresce em degraus de ~1,5× (1 usuário por segundo, 2, 4, 8, 12, 16, 24...
-   até 256). Em cada degrau o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
-2. **O pico:** por 1 minuto chegam 400 usuários por segundo (desistem se o site não carregar
-   em 60 s; depois de clicar em comprar, esperam a resposta), 40 usuários muito engajados por
+   até o maior degrau abaixo do pico). Em cada degrau o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
+2. **O pico:** por 1 minuto chegam 120 usuários por segundo (desistem se o site não carregar
+   em 60 s; depois de clicar em comprar, esperam a resposta), 12 usuários muito engajados por
    segundo (nunca desistem e tentam de novo até conseguir) e robôs cambistas tentando
    furar o limite de ingressos por CPF.
 

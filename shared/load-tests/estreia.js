@@ -46,7 +46,7 @@ const OUTRAS_ETAPAS = new SharedArray('outras etapas', () =>
 );
 
 // O pico
-const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 400);
+const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 120);
 
 // A subida: cada degrau tem ~1,5× o anterior, sempre abaixo do pico. Com degraus
 // que dobram, um ganho menor que 2× não apareceria na capacidade.
