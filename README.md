@@ -81,7 +81,8 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 ├── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
 ├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
 ├── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
-└── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
+├── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
+└── 07-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s
 ```
 
 ## Comparação justa entre etapas

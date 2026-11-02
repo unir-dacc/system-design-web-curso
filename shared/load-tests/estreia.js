@@ -31,11 +31,13 @@ const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
 const CINEMA = 'http://sistema-cinema:8000';
 const GATEWAY = 'http://gateway-pagamento:8000';
 const ETAPA = __ENV.ETAPA || 'Ingressa';
+// O hardware do Ingressa nesta etapa (aparece na comparação entre etapas)
+const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila', '06-sala-de-espera'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila', '06-sala-de-espera', '07-mais-hardware'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -771,6 +773,8 @@ function resumir(r) {
   const fracao = (parte, total) => (total ? parte / total : 0);
   return {
     etapa: r.etapa,
+    hardware: HARDWARE,
+    picoUsuariosPorSegundo: r.pico.usuariosPorSegundo,
     quando: new Date().toISOString(),
     capacidade: r.subida.capacidade ? r.subida.capacidade.usuariosPorSegundo : 0,
     curiososAtendidos: fracao(r.pico.curiosos.soOlharam, r.pico.curiosos.chegaram),
@@ -834,7 +838,7 @@ function gerarTexto(r) {
 
   const comparacao = r.comparacao.map(
     (c) =>
-      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 26)}${col(`${c.capacidade}/s`, 10)}${col(pctFracao(c.curiososAtendidos), 11)}` +
+      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 28)}${linha(c.hardware || '2 CPUs / 2 GB', 15)}${col(`${c.picoUsuariosPorSegundo || 120}/s`, 6)}${col(`${c.capacidade}/s`, 9)}${col(pctFracao(c.curiososAtendidos), 11)}` +
       `${col(pctFracao(c.compradoresAtendidos), 13)}${col(c.comprasPorSegundoNoPico.toFixed(1), 11)}` +
       `   ${c.travou ? 'travou' : c.caiuNaSubida ? 'caiu, voltou' : 'ficou de pé'}`,
   );
@@ -891,8 +895,8 @@ ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe
 ${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
   3. COMPARAÇÃO COM AS ETAPAS ANTERIORES (último resultado de cada uma)
 
-      etapa                     aguenta   curiosos  compradores  compras/s   no fim
-                                          no pico     no pico     no pico
+      etapa                       hardware         pico  aguenta   curiosos  compradores  compras/s   no fim
+                                                                   no pico     no pico     no pico
 ${comparacao.join('\n')}
 
   Relatório para projetar: relatorios/estreia.html

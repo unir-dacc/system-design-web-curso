@@ -59,7 +59,7 @@ function comparacao(lista) {
   const quando = (iso) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const linhas = lista.map(
     (c) => `<div class="linha-etapa ${c.atual ? 'atual' : ''}">
-      <div><b>${c.etapa}</b><span>${c.atual ? 'esta rodada' : `rodou em ${quando(c.quando)}`}</span></div>
+      <div><b>${c.etapa}</b><span>${c.hardware || '2 CPUs / 2 GB'} · pico de ${c.picoUsuariosPorSegundo || 120}/s</span><span>${c.atual ? 'esta rodada' : `rodou em ${quando(c.quando)}`}</span></div>
       <div class="forte">${c.capacidade}/s</div>
       <div>${porcento(c.curiososAtendidos)}</div>
       <div>${porcento(c.compradoresAtendidos)}</div>
@@ -366,7 +366,7 @@ export function gerarHtml(r) {
   <div class="bloco" style="margin-top:14px">${tabelaDaProgressao(r.progressao)}</div>
 
   <h2>O ganho de cada etapa</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa anterior. Todas com o mesmo hardware: 2 CPUs e 2 GB para o Ingressa.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa anterior. Até a etapa 06, todas com o mesmo hardware: 2 CPUs e 2 GB para o Ingressa.</p>
   <div class="bloco">${comparacao(r.comparacao)}</div>
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
