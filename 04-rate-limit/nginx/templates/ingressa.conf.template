@@ -72,6 +72,7 @@ server {
 
     location @muita_gente {
         default_type application/json;
+        add_header Retry-After 2 always;
         return 429 '{"detail": "Muita gente no site agora. Tente de novo em instantes."}';
     }
 }

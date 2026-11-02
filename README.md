@@ -80,7 +80,8 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 ├── 02-cache/                    # cache das respostas iguais para todos (Redis)
 ├── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
 ├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
-└── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
+├── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
+└── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
 ```
 
 ## Comparação justa entre etapas

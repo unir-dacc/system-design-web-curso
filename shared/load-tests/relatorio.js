@@ -222,6 +222,7 @@ const ESTILO = `
     .espera .nome { grid-column: 1 / -1; }
   }
   .degrau { display: grid; grid-template-columns: 90px repeat(6, 1fr) 70px; gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
+  .degrau.com-sala { grid-template-columns: 90px repeat(7, 1fr) 70px; }
   .degrau + .degrau { margin-top: 6px; }
   .degrau.cabecalho { color: var(--apagado); font-size: 13px; padding-top: 0; padding-bottom: 4px; }
   .degrau.viavel { background: #f0fdf4; } .degrau.inviavel { background: #fef2f2; }
@@ -295,24 +296,26 @@ function vereditoCapacidade(s) {
     <p>≈ ${inteiro(s.capacidade.simultaneos)} pessoas no site ao mesmo tempo. ${quebra}</p>`;
 }
 
-function tabelaDeDegraus(s, metas) {
+function tabelaDeDegraus(s, metas, sala) {
+  // Nas etapas com sala de espera, uma coluna a mais: quanto tempo esperaram a vez
+  const comSala = sala ? ' com-sala' : '';
   const classe = (valor, limite) => (valor === undefined ? '' : valor <= limite ? 'bom' : 'ruim');
   const porcento = (fracao) => (fracao === undefined ? '—' : `${decimal(fracao * 100)}%`);
   const linhas = s.degraus.map(
-    (d) => `<div class="degrau ${d.viavel ? 'viavel' : 'inviavel'}">
+    (d) => `<div class="degrau${comSala} ${d.viavel ? 'viavel' : 'inviavel'}">
       <div class="fas">${d.usuariosPorSegundo}/s</div>
       <div>${d.simultaneos === undefined ? '—' : inteiro(d.simultaneos)}</div>
       <div class="opcional">${decimal(d.comprasPorSegundo)}/s</div>
       <div class="${classe(d.p95Pagina, metas.paginaMs)}">${tempo(d.p95Pagina)}</div>
       <div class="${classe(d.p95Compra, metas.compraMs)}">${tempo(d.p95Compra)}</div>
       <div class="opcional ${d.erros === undefined ? '' : d.erros < metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
-      <div class="${d.barrados < metas.erros ? 'bom' : 'ruim'}">${porcento(d.barrados)}</div>
+      <div class="${d.barrados < metas.erros ? 'bom' : 'ruim'}">${porcento(d.barrados)}</div>${sala ? `<div class="${classe(d.p95Sala, sala.metaMs)}">${tempo(d.p95Sala)}</div>` : ''}
       <div class="estado">${d.viavel ? '✅' : '❌'}</div>
     </div>`,
   );
-  return `<div class="degrau cabecalho">
+  return `<div class="degrau cabecalho${comSala}">
       <div>usuários chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
-      <div>95% das páginas abriram em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div>
+      <div>95% das páginas abriram em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div>${sala ? '<div>95% esperaram na sala até</div>' : ''}
       <div></div>
     </div>
     ${linhas.join('')}`;
@@ -368,7 +371,7 @@ export function gerarHtml(r) {
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
   <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% das páginas (programação e mapa) abrem em até ${tempo(r.metas.paginaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
-  <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
+  <div class="bloco">${tabelaDeDegraus(s, r.metas, r.sala)}</div>
 
   <h2>1 · A subida: a velocidade de cada endpoint</h2>
   <p class="detalhe" style="margin:-6px 0 14px">A subida inteira, todos os degraus juntos. O tempo é só de quem foi atendido: quem foi barrado na porta aparece à parte.</p>
@@ -381,6 +384,7 @@ export function gerarHtml(r) {
       <div class="detalhe">Olham a programação e o mapa de duas sessões, e vão embora.</div>
       ${funil([
         ['Chegaram', cu.chegaram],
+        ...(r.sala ? [['Passaram pela sala de espera', cu.passaramPelaSala]] : []),
         ['Viram a programação', cu.viramProgramacao],
         ['Viram o mapa', cu.viramMapa],
         ['Viram tudo', cu.soOlharam],
@@ -392,6 +396,7 @@ export function gerarHtml(r) {
       <div class="detalhe">Olham a programação e o mapa, e compram de 1 a 4 ingressos.</div>
       ${funil([
         ['Chegaram', co.chegaram],
+        ...(r.sala ? [['Passaram pela sala de espera', co.passaramPelaSala]] : []),
         ['Viram a programação', co.viramProgramacao],
         ['Viram o mapa', co.viramMapa],
         ['Tentaram comprar', co.tentaramComprar],
@@ -424,6 +429,7 @@ export function gerarHtml(r) {
   <div class="bloco">
     ${espera('Abrir uma página', p.espera.pagina, r.metas.paginaMs)}
     ${espera('Concluir a compra', p.espera.compra, r.metas.compraMs)}
+    ${r.sala ? espera('Esperar a vez na sala', r.sala.espera, r.sala.metaMs) : ''}
   </div>
 
   <h2>2 · O pico: a velocidade de cada endpoint</h2>

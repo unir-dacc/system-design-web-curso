@@ -35,7 +35,7 @@ const ETAPA = __ENV.ETAPA || 'Ingressa';
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila', '06-sala-de-espera'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -73,9 +73,13 @@ const OLHANDO_O_MAPA_S = [2, 5];
 // clicar em comprar, todo mundo espera a resposta.
 const PACIENCIA = '60s';
 const ESPERA_DA_COMPRA = '10m';
+// Nas etapas com sala de espera: quanto tempo o usuário aceita esperar a vez
+const ESPERA_NA_SALA_MS = 3 * 60 * 1000;
+const ESPERA_NA_SALA_DO_ENGAJADO_MS = 10 * 60 * 1000; // o engajado espera o quanto for preciso
 
 // O que é um site "viável"
 const META_PAGINA_MS = 2000; // programação e mapa
+const META_SALA_MS = 30000; // nas etapas com sala de espera: 95% esperam a vez em até 30 s
 const META_COMPRA_MS = 5000; // uma compra leva ~2,7 s só esperando o cinema e o gateway
 const META_ERROS = 0.01;
 
@@ -121,6 +125,7 @@ const ENDPOINTS = {
   mapa: 'GET /sessoes/{id}/assentos',
   compra: 'POST /pedidos',
   pedido: 'GET /pedidos/{id}',
+  sala: 'POST /sala, GET /sala/{n}',
 };
 const PARTES = ['subida', 'pico'];
 const RESULTADOS = ['ok', 'erro', 'barrada'];
@@ -136,6 +141,11 @@ const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 // do fim da rodada a fila esvaziou
 const filaDeCompras = new Trend('fila_de_compras');
 const filaEsvaziouDepois = new Gauge('fila_esvaziou_depois_s');
+
+// Nas etapas com sala de espera
+const passaramPelaSala = new Counter('usuarios_passaram_pela_sala');
+const desistiramNaSala = new Counter('usuarios_desistiram_na_sala');
+const tempoNaSala = new Trend('tempo_na_sala', true);
 
 // Não são falhas do sistema: compra aceita para processar (202), erros de negócio (402, 409, 422) e a recusa na
 // porta pelo limite de compras (429), que é a proteção funcionando
@@ -156,7 +166,7 @@ function chegada(funcao, stages, vus, extras = {}) {
     preAllocatedVUs: vus,
     maxVUs: vus,
     stages,
-    gracefulStop: '60s', // quem chegou no fim também tem tempo de terminar
+    gracefulStop: '4m', // quem chegou no fim também tem tempo de terminar (inclusive na sala de espera)
     ...extras,
   };
 }
@@ -216,6 +226,7 @@ export const options = {
     // Metas do pico
     'tempo_da_pagina{scenario:pico}': [`p(95)<${META_PAGINA_MS}`],
     'tempo_da_compra{scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
+    'tempo_na_sala{scenario:pico}': ['max>=0'],
     'http_req_failed{scenario:subida}': ['rate>=0'], // para separar os erros do pico (conta feita no resultado)
     'http_req_failed{scenario:observador}': ['rate>=0'],
 
@@ -232,6 +243,8 @@ export const options = {
           'usuarios_compraram',
           'usuarios_desistiram',
           'usuarios_encontraram_esgotado',
+          'usuarios_passaram_pela_sala',
+          'usuarios_desistiram_na_sala',
         ].map((m) => `${m}{scenario:pico,tipo:${tipo}}`),
       ),
       'usuarios_entraram{scenario:pico}',
@@ -258,6 +271,7 @@ export const options = {
         `tempo_da_pagina{degrau:${d}}`,
         `tempo_da_compra{degrau:${d}}`,
         `tempo_do_usuario{degrau:${d}}`,
+        `tempo_na_sala{degrau:${d}}`,
       ]),
       'max>=0',
     ),
@@ -326,6 +340,41 @@ function medirEndpoint(endpoint, r) {
   if (resultado === 'ok') tempoPorEndpoint.add(r.timings.duration, { endpoint, parte });
 }
 
+// O passe da sala de espera deste usuário virtual (nas etapas que têm sala)
+let passe = null;
+const comPasse = () => (passe ? { 'X-Passe': passe } : {});
+
+// Pega uma senha na sala de espera e aguarda a vez, perguntando de novo quando
+// o servidor mandar (Retry-After). Se a própria sala estiver cheia (429), a
+// página de espera também tenta de novo: ninguém vai embora por isso.
+// Devolve true se entrou.
+function passarPelaSala(paciencia, tags = {}) {
+  const inicio = Date.now();
+  const params = { timeout: PACIENCIA, tags: { name: 'sala', endpoint: 'sala', ...tags } };
+  let senha = null;
+  for (;;) {
+    const r = senha === null ? http.post(`${INGRESSA}/sala`, null, params) : http.get(`${INGRESSA}/sala/${senha}`, params);
+    medirEndpoint('sala', r);
+    if (r.status === 200) {
+      senha = r.json('senha');
+      if (r.json('liberado')) {
+        passe = r.json('passe');
+        passaramPelaSala.add(1, tags);
+        tempoNaSala.add(Date.now() - inicio, tags);
+        return true;
+      }
+    } else if (r.status !== 429) {
+      if (r.status === 0 && souUsuarioComum()) desistiram.add(1, tags);
+      return false;
+    }
+    if (Date.now() - inicio > paciencia) {
+      desistiramNaSala.add(1, tags);
+      return false;
+    }
+    sleep(Number(r.headers['Retry-After']) || 1);
+  }
+}
+
 // Uma página carregada pelo usuário: conta o tempo de quem foi atendido, quem
 // foi barrado na porta e quem desistiu de esperar. Devolve as respostas, ou
 // null se a página não abriu.
@@ -341,7 +390,7 @@ function abrirPagina(requisicoes, tags) {
 
 // A programação é igual para todo mundo: os filmes e as sessões da estreia
 function abrirProgramacao(tags = {}) {
-  const params = (endpoint) => ({ timeout: PACIENCIA, tags: { name: 'programacao', endpoint, ...tags } });
+  const params = (endpoint) => ({ timeout: PACIENCIA, headers: comPasse(), tags: { name: 'programacao', endpoint, ...tags } });
   return abrirPagina(
     [
       ['GET', `${INGRESSA}/filmes`, null, params('filmes')],
@@ -353,7 +402,7 @@ function abrirProgramacao(tags = {}) {
 
 function abrirMapa(sessao, tags = {}) {
   const timeout = exec.scenario.name === 'engajados' ? ESPERA_DA_COMPRA : PACIENCIA;
-  const params = { timeout, tags: { name: 'mapa', endpoint: 'mapa', ...tags } };
+  const params = { timeout, headers: comPasse(), tags: { name: 'mapa', endpoint: 'mapa', ...tags } };
   const respostas = abrirPagina([['GET', `${INGRESSA}/sessoes/${sessao}/assentos`, null, params]], tags);
   if (respostas === null) return null;
   return respostas[0].json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
@@ -362,7 +411,7 @@ function abrirMapa(sessao, tags = {}) {
 function comprar(sessao, cpf, itens, cartao, tags = {}) {
   const corpo = { sessao_id: sessao, nome: 'Cliente', cpf, email: `${cpf}@exemplo.com`, cartao_token: cartao, itens };
   const r = http.post(`${INGRESSA}/pedidos`, JSON.stringify(corpo), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...comPasse() },
     timeout: ESPERA_DA_COMPRA,
     tags: { name: 'compra', endpoint: 'compra', ...tags },
   });
@@ -381,18 +430,18 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
 
 // --- Personagens ---
 
-export function usuario() {
+export function usuario(rodada) {
   // Cada usuário já chega sabendo o que quer: só olhar (curioso) ou comprar
   const tipo = Math.random() < FRACAO_QUE_COMPRA ? 'comprador' : 'curioso';
   const tags = exec.scenario.name === 'subida' ? { degrau: String(degrauAtual()), tipo } : { tipo };
   const inicio = Date.now();
-  visitarOSite(tags);
+  usuariosEntraram.add(1, tags);
+  passe = null; // cada chegada é uma pessoa nova
+  if (!rodada.temSala || passarPelaSala(ESPERA_NA_SALA_MS, tags)) visitarOSite(tags);
   tempoDoUsuario.add(Date.now() - inicio, tags);
 }
 
 function visitarOSite(tags) {
-  usuariosEntraram.add(1, tags);
-
   // 1. Abre a programação e escolhe uma sessão
   if (abrirProgramacao(tags) === null) return;
   usuariosViramProgramacao.add(1, tags);
@@ -425,10 +474,12 @@ function visitarOSite(tags) {
   if (comprar(sessao, gerarCpf(), itens, `tok_usuario_${__VU}`, tags) === 201) usuariosCompraram.add(1, tags);
 }
 
-export function engajado() {
+export function engajado(rodada) {
   engajadosChegaram.add(1);
   const inicio = Date.now();
   const sessoesEsgotadas = new Set();
+  passe = null;
+  if (rodada.temSala && !passarPelaSala(ESPERA_NA_SALA_DO_ENGAJADO_MS)) return;
 
   // Não desiste: tenta até comprar, até esgotar tudo ou até o teste acabar
   while (sessoesEsgotadas.size < SESSOES.length) {
@@ -454,7 +505,9 @@ export function engajado() {
   engajadosEsgotado.add(1);
 }
 
-export function cambista() {
+export function cambista(rodada) {
+  // O robô também precisa passar pela sala (uma vez só: depois reaproveita o passe)
+  if (rodada.temSala && passe === null && !passarPelaSala(ESPERA_NA_SALA_DO_ENGAJADO_MS)) return;
   const cpf = CPFS_CAMBISTAS[__VU % CPFS_CAMBISTAS.length];
   const livres = abrirMapa(1);
   if (livres && livres.length >= 2) {
@@ -481,7 +534,9 @@ export function setup() {
   }
   // Toda rodada parte do zero (a configuração dos simuladores é mantida)
   for (const url of [INGRESSA, CINEMA, GATEWAY]) http.post(`${url}/admin/reset`);
-  return { comecou: true };
+  // A etapa tem sala de espera? (as outras respondem 404)
+  const temSala = http.post(`${INGRESSA}/sala`, null, { responseCallback: http.expectedStatuses(200, 404) }).status === 200;
+  return { comecou: true, temSala };
 }
 
 export function teardown() {
@@ -518,6 +573,7 @@ export function teardown() {
 // --- Resultado ---
 
 function calcularResultado(data) {
+  const temSala = Boolean(data.setup_data.temSala);
   const v = (nome) => (data.metrics[nome] ? data.metrics[nome].values : {});
   const n = (nome) => v(nome).count || 0;
   const passou = (nome) => {
@@ -535,6 +591,7 @@ function calcularResultado(data) {
   const degraus = DEGRAUS.map((d) => {
     const p95Pagina = p95(`tempo_da_pagina{degrau:${d}}`);
     const p95Compra = p95(`tempo_da_compra{degrau:${d}}`);
+    const p95Sala = temSala ? p95(`tempo_na_sala{degrau:${d}}`) : undefined;
     const erros = v(`http_req_failed{degrau:${d}}`).rate;
     const tempoMedio = v(`tempo_do_usuario{degrau:${d}}`).avg;
     const entraram = n(`usuarios_entraram{degrau:${d}}`);
@@ -549,6 +606,7 @@ function calcularResultado(data) {
       viramTudo: n(`usuarios_so_olharam{degrau:${d}}`),
       p95Pagina,
       p95Compra,
+      p95Sala,
       erros,
       barrados,
       // Lei de Little: pessoas no site ao mesmo tempo = chegada por segundo × tempo que cada uma fica
@@ -557,7 +615,8 @@ function calcularResultado(data) {
         p95Pagina !== undefined && p95Pagina <= META_PAGINA_MS &&
         p95Compra !== undefined && p95Compra <= META_COMPRA_MS &&
         erros !== undefined && erros < META_ERROS &&
-        barrados < META_ERROS, // um site que recusa gente não está atendendo todo mundo
+        barrados < META_ERROS && // um site que recusa gente não está atendendo todo mundo
+        (!temSala || (p95Sala !== undefined && p95Sala <= META_SALA_MS)), // nem um que deixa todo mundo esperando
     };
   });
   // Capacidade = o maior degrau viável (um degrau azarado no meio não derruba o resultado)
@@ -585,6 +644,8 @@ function calcularResultado(data) {
       compraram: m('usuarios_compraram'),
       esgotado: m('usuarios_encontraram_esgotado'),
       desistiram: m('usuarios_desistiram'),
+      passaramPelaSala: m('usuarios_passaram_pela_sala'),
+      desistiramNaSala: m('usuarios_desistiram_na_sala'),
     };
   };
 
@@ -680,6 +741,8 @@ function calcularResultado(data) {
     },
     endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: porEndpoint('pico', PICO_S) },
     progressao,
+    // Nas etapas com sala de espera (null nas outras)
+    sala: temSala ? { espera: espera('tempo_na_sala{scenario:pico}'), metaMs: META_SALA_MS } : null,
     // Nas etapas com fila (sem dados nas outras)
     fila: v('fila_de_compras').max === undefined ? null : { maior: v('fila_de_compras').max, esvaziouDepoisS: v('fila_esvaziou_depois_s').value },
     picoSimultaneos: v('vus').max || 0,
@@ -766,7 +829,7 @@ function gerarTexto(r) {
     (d) =>
       `    ${col(d.usuariosPorSegundo, 10)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
       `${col(d.comprasPorSegundo.toFixed(1), 11)}${col(seg(d.p95Pagina), 11)}${col(seg(d.p95Compra), 12)}` +
-      `${col(pctFracao(d.erros), 9)}${col(pctFracao(d.barrados), 10)}    ${d.viavel ? '✅' : '❌'}`,
+      `${col(pctFracao(d.erros), 9)}${col(pctFracao(d.barrados), 10)}${r.sala ? col(seg(d.p95Sala), 10) : ''}    ${d.viavel ? '✅' : '❌'}`,
   );
 
   const comparacao = r.comparacao.map(
@@ -785,7 +848,7 @@ function gerarTexto(r) {
 
     ${capacidade}
 
-    usuários/s  no site junto  compras/s  95% página 95% compra   erros  barrados   viável?
+    usuários/s  no site junto  compras/s  95% página 95% compra   erros  barrados${r.sala ? '  95% sala' : ''}   viável?
 ${degraus.join('\n')}
 
     A progressão das vendas: a procura (compradores chegando) e as vendas, até o pico
@@ -803,7 +866,7 @@ ${tabelaDeEndpoints(r.endpoints.subida)}
 
     Quem queria comprar (compradores) ....... ${pct(co.compraram, co.chegaram)} conseguiu comprar
       Chegaram ${co.chegaram} · viram a programação ${co.viramProgramacao} · viram o mapa ${co.viramMapa} · tentaram comprar ${co.tentaramComprar} · compraram ${co.compraram}
-      Desistiram ${co.desistiram} · encontraram a sessão esgotada ${co.esgotado}
+      Desistiram ${co.desistiram} · encontraram a sessão esgotada ${co.esgotado}${r.sala ? `\n\n    A sala de espera (usuários comuns)\n      Curiosos: passaram ${cu.passaramPelaSala} · desistiram de esperar ${cu.desistiramNaSala}\n      Compradores: passaram ${co.passaramPelaSala} · desistiram de esperar ${co.desistiramNaSala}\n      Espera pela vez: metade em até ${seg(r.sala.espera.mediana)}, 95% em até ${seg(r.sala.espera.p95)}, o pior ${seg(r.sala.espera.pior)}` : ''}
 
     Os muito engajados (nunca desistem) ..... ${pct(e.compraram, e.chegaram)} conseguiu comprar
       Chegaram ${e.chegaram} · compraram ${e.compraram} · ainda esperando no fim ${e.aindaEsperando} · tempo até comprar: metade em até ${seg(e.tempo.mediana)}
