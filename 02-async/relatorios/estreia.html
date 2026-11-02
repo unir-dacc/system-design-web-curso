@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estreia · Etapa 02 · Async</title>
+
+<style>
+  :root {
+    --fundo: #f4f1ea; --papel: #ffffff; --tinta: #1c1917; --apagado: #78716c; --linha: #e7e2d8;
+    --ouro: #d4a017; --bom: #15803d; --ruim: #b91c1c; --aviso: #b45309; --barra: #1c1917;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--tinta); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: #0c0a09; color: #fafaf9; padding: 40px 0 48px; }
+  header > div { padding: 0 16px; }
+  main, header > div { max-width: 1080px; margin: 0 auto; }
+  main { padding: 0 16px 48px; }
+  .selo { color: var(--ouro); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; }
+  h1 { font-size: clamp(28px, 5vw, 46px); line-height: 1.1; margin: 10px 0 8px; }
+  header p { margin: 0; color: #a8a29e; }
+  .veredito { background: var(--papel); border-radius: 16px; margin-top: -24px; padding: 28px; box-shadow: 0 8px 30px rgb(0 0 0 / .06); }
+  .veredito .grande { font-size: clamp(40px, 8vw, 72px); font-weight: 800; line-height: 1; }
+  .veredito .grande small { font-size: .4em; font-weight: 600; color: var(--apagado); }
+  .veredito p { margin: 8px 0 0; font-size: 20px; }
+  .alerta { background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d; border-radius: 12px; padding: 14px 18px; margin-top: 16px; }
+  code { background: rgb(0 0 0 / .06); padding: 2px 6px; border-radius: 6px; }
+  h2 { font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--apagado); margin: 40px 0 14px; }
+  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .cartao, .bloco { background: var(--papel); border-radius: 14px; padding: 20px; }
+  .rotulo { color: var(--apagado); font-size: 14px; }
+  .valor { font-size: 34px; font-weight: 800; margin: 4px 0; }
+  .detalhe { color: var(--apagado); font-size: 14px; }
+  .trilho { background: var(--linha); border-radius: 99px; height: 8px; margin: 8px 0; overflow: hidden; }
+  .trilho.largo { height: 26px; border-radius: 8px; margin: 0; }
+  .cheio { background: var(--barra); height: 100%; border-radius: inherit; }
+  .etapa { display: grid; grid-template-columns: 230px 1fr 120px; gap: 14px; align-items: center; padding: 8px 0; }
+  .etapa:last-child .cheio { background: var(--ouro); }
+  .etapa .numero { font-weight: 700; font-size: 18px; text-align: right; }
+  .etapa .numero span { color: var(--apagado); font-weight: 500; font-size: 14px; margin-left: 4px; }
+  .espera { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr); gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--linha); }
+  .espera:first-child { border-top: 0; }
+  .espera .nome { font-weight: 700; font-size: 18px; }
+  .espera .nome span { display: block; font-weight: 400; font-size: 13px; color: var(--apagado); }
+  .medida > div:last-child { font-size: 26px; font-weight: 800; }
+  .bom { color: var(--bom); } .ruim { color: var(--ruim); } .aviso { color: var(--aviso); }
+  .metas { display: grid; gap: 10px; }
+  .meta { background: var(--papel); border-radius: 12px; padding: 14px 18px; font-weight: 600; border-left: 6px solid currentColor; }
+  .meta span { color: var(--apagado); font-weight: 400; margin-left: 8px; }
+  footer { color: var(--apagado); font-size: 14px; margin-top: 32px; }
+  @media (max-width: 700px) {
+    .etapa { grid-template-columns: 1fr 90px; }
+    .etapa .trilho { grid-column: 1 / -1; grid-row: 2; }
+    .espera { grid-template-columns: 1fr 1fr 1fr; }
+    .espera .nome { grid-column: 1 / -1; }
+  }
+  .degrau { display: grid; grid-template-columns: 90px repeat(6, 1fr) 70px; gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
+  .degrau + .degrau { margin-top: 6px; }
+  .degrau.cabecalho { color: var(--apagado); font-size: 13px; padding-top: 0; padding-bottom: 4px; }
+  .degrau.viavel { background: #f0fdf4; } .degrau.inviavel { background: #fef2f2; }
+  .degrau .fas { font-weight: 800; font-size: 20px; }
+  .degrau .estado { font-size: 22px; text-align: center; }
+  @media (max-width: 700px) {
+    .degrau { grid-template-columns: 60px repeat(4, 1fr) 40px; font-size: 14px; }
+    .degrau .opcional { display: none; }
+  }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .dupla > div + div { border-left: 1px solid var(--linha); padding-left: 28px; }
+  .dupla .rotulo { margin-bottom: 6px; }
+  .dupla .grande { font-size: clamp(36px, 6vw, 60px); }
+  @media (max-width: 700px) {
+    .dupla { grid-template-columns: 1fr; }
+    .dupla > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: 20px; }
+  }
+</style>
+
+</head>
+<body>
+
+<header><div>
+  <div class="selo">Teste de carga · Etapa 02 · Async</div>
+  <h1>Estreia do maior filme da história</h1>
+  <p>Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
+  400 usuários por segundo, 40 usuários muito engajados por segundo e 20 robôs cambistas, durante 1 minuto.</p>
+</div></header>
+<main>
+  <section class="veredito dupla">
+    <div>
+      <div class="rotulo">O máximo que o Ingressa aguenta</div>
+      <div class="grande">16 usuários/s</div>
+    <p>≈ 40 pessoas no site ao mesmo tempo. Com 32 usuários/s, fica inviável.</p>
+    </div>
+    <div>
+      <div class="rotulo">No pico</div>
+      <div class="grande">0%</div>
+      <p>dos usuários conseguiram comprar: 0 de 21.919.</p>
+    </div>
+  </section>
+  <div class="alerta">⚠️ O Ingressa <b>caiu ainda na subida</b>, com 64 usuários por segundo, antes de o pico começar: o resultado do pico mostra um sistema que já estava fora do ar.</div><div class="alerta">⚠️ <b>207 ingressos</b> foram vendidos, mas o teste acabou antes de o usuário receber a confirmação: ele ainda estava esperando na tela de pagamento.</div>
+
+  <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de 15 s. Um degrau é viável quando 95% abrem o mapa em até 2,0 s, 95% compram em até 5,0 s, e menos de 1,0% das requisições dão erro ou são barradas no limite.</p>
+  <div class="bloco"><div class="degrau cabecalho">
+      <div>usuários chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
+      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div>
+      <div></div>
+    </div>
+    <div class="degrau viavel">
+      <div class="fas">1/s</div>
+      <div>2</div>
+      <div class="opcional">0,8/s</div>
+      <div class="bom">96 ms</div>
+      <div class="bom">2,1 s</div>
+      <div class="opcional bom">0,0%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">✅</div>
+    </div><div class="degrau viavel">
+      <div class="fas">2/s</div>
+      <div>3</div>
+      <div class="opcional">1,9/s</div>
+      <div class="bom">80 ms</div>
+      <div class="bom">2,1 s</div>
+      <div class="opcional bom">0,0%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">✅</div>
+    </div><div class="degrau viavel">
+      <div class="fas">4/s</div>
+      <div>7</div>
+      <div class="opcional">3,4/s</div>
+      <div class="bom">80 ms</div>
+      <div class="bom">2,1 s</div>
+      <div class="opcional bom">0,0%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">✅</div>
+    </div><div class="degrau viavel">
+      <div class="fas">8/s</div>
+      <div>13</div>
+      <div class="opcional">7,6/s</div>
+      <div class="bom">98 ms</div>
+      <div class="bom">2,1 s</div>
+      <div class="opcional bom">0,0%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">✅</div>
+    </div><div class="degrau viavel">
+      <div class="fas">16/s</div>
+      <div>40</div>
+      <div class="opcional">14,9/s</div>
+      <div class="bom">805 ms</div>
+      <div class="bom">3,1 s</div>
+      <div class="opcional bom">0,0%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">✅</div>
+    </div><div class="degrau inviavel">
+      <div class="fas">32/s</div>
+      <div>435</div>
+      <div class="opcional">19,1/s</div>
+      <div class="ruim">6,8 s</div>
+      <div class="ruim">41,1 s</div>
+      <div class="opcional ruim">11,1%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">❌</div>
+    </div><div class="degrau inviavel">
+      <div class="fas">64/s</div>
+      <div>3.138</div>
+      <div class="opcional">0,1/s</div>
+      <div class="ruim">60,0 s</div>
+      <div class="ruim">85,9 s</div>
+      <div class="opcional ruim">57,1%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">❌</div>
+    </div><div class="degrau inviavel">
+      <div class="fas">128/s</div>
+      <div>7.644</div>
+      <div class="opcional">0,0/s</div>
+      <div class="ruim">60,0 s</div>
+      <div class="ruim">32,4 s</div>
+      <div class="opcional ruim">98,3%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">❌</div>
+    </div><div class="degrau inviavel">
+      <div class="fas">256/s</div>
+      <div>9.690</div>
+      <div class="opcional">0,0/s</div>
+      <div class="ruim">60,0 s</div>
+      <div class="">—</div>
+      <div class="opcional ruim">99,9%</div>
+      <div class="bom">0,0%</div>
+      <div class="estado">❌</div>
+    </div></div>
+
+  <h2>2 · O pico: o sistema</h2>
+  <div class="cartoes">
+    <div class="cartao"><div class="rotulo">Ingressos vendidos</div><div class="valor">1.999</div><div class="trilho"><div class="cheio" style="width:8%"></div></div><div class="detalhe">de 24.000 lugares, na rodada inteira</div></div>
+    <div class="cartao"><div class="rotulo">Pico de usuários ao mesmo tempo</div><div class="valor">15.607</div><div class="detalhe">esperando uma resposta no mesmo instante</div></div>
+    <div class="cartao"><div class="rotulo">Requisições respondidas</div><div class="valor">1,1/s</div><div class="trilho"><div class="cheio" style="width:0%"></div></div><div class="detalhe">de 420,4/s enviadas</div></div>
+    <div class="cartao"><div class="rotulo">Compras concluídas</div><div class="valor">0,0/s</div><div class="detalhe">0 compras no pico</div></div>
+    <div class="cartao"><div class="rotulo">Barrados na porta</div><div class="valor">0,0/s</div><div class="detalhe">0 requisições recusadas pelo limite</div></div>
+  </div>
+
+  <h2>2 · O pico: o caminho do usuário</h2>
+  <div class="bloco"><div class="etapa">
+        <div class="nome">Chegaram</div>
+        <div class="trilho largo"><div class="cheio" style="width:100%"></div></div>
+        <div class="numero">21.919 <span>100%</span></div>
+      </div><div class="etapa">
+        <div class="nome">Conseguiram entrar no site</div>
+        <div class="trilho largo"><div class="cheio" style="width:100%"></div></div>
+        <div class="numero">21.919 <span>100%</span></div>
+      </div><div class="etapa">
+        <div class="nome">Viram o mapa de assentos</div>
+        <div class="trilho largo"><div class="cheio" style="width:1%"></div></div>
+        <div class="numero">45 <span>0%</span></div>
+      </div><div class="etapa">
+        <div class="nome">Tentaram comprar</div>
+        <div class="trilho largo"><div class="cheio" style="width:1%"></div></div>
+        <div class="numero">45 <span>0%</span></div>
+      </div><div class="etapa">
+        <div class="nome">Compraram</div>
+        <div class="trilho largo"><div class="cheio" style="width:0%"></div></div>
+        <div class="numero">0 <span>0%</span></div>
+      </div></div>
+  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>21.385</b> · Barrados na porta: <b>0</b> · Encontraram a sessão esgotada: <b>0</b></div>
+
+  <h2>2 · O pico: os usuários muito engajados</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
+  <div class="cartoes">
+    <div class="cartao"><div class="rotulo">Conseguiram comprar</div><div class="valor">0%</div><div class="trilho"><div class="cheio" style="width:0%"></div></div><div class="detalhe">0 de 2.199 engajados</div></div>
+    <div class="cartao"><div class="rotulo">Ainda esperando no fim</div><div class="valor">2.199</div><div class="detalhe">o teste acabou e eles continuavam lá</div></div>
+    <div class="cartao"><div class="rotulo">Tempo até comprar</div><div class="valor">—</div><div class="detalhe">metade em até isso; o pior: —</div></div>
+    <div class="cartao"><div class="rotulo">Tentativas</div><div class="valor">5.412</div><div class="detalhe">2,5 por engajado, em média</div></div>
+  </div>
+
+  <h2>2 · O pico: a espera</h2>
+  <div class="bloco">
+    <div class="espera">
+    <div class="nome">Abrir o mapa<span>meta: 95% em até 2,0 s</span></div>
+    <div class="medida"><div class="rotulo">metade esperou até</div><div class="">—</div></div>
+    <div class="medida"><div class="rotulo">95% esperaram até</div><div class="ruim">58,8 s</div></div>
+    <div class="medida"><div class="rotulo">o pior caso</div><div class="ruim">60,0 s</div></div>
+  </div>
+    <div class="espera">
+    <div class="nome">Concluir a compra<span>meta: 95% em até 5,0 s</span></div>
+    <div class="medida"><div class="rotulo">metade esperou até</div><div class="ruim">32,4 s</div></div>
+    <div class="medida"><div class="rotulo">95% esperaram até</div><div class="ruim">33,4 s</div></div>
+    <div class="medida"><div class="rotulo">o pior caso</div><div class="ruim">40,1 s</div></div>
+  </div>
+  </div>
+
+  <h2>Metas do pico</h2>
+  <div class="metas"><div class="meta ruim">❌ 95% dos usuários abrem o mapa em até 2 s</div><div class="meta ruim">❌ 95% dos usuários concluem a compra em até 5 s</div><div class="meta ruim">❌ Menos de 1% de requisições com erro<span>99.7% com erro</span></div></div>
+
+  <footer>
+    "Pessoas no site ao mesmo tempo" é estimado pela Lei de Little: usuários chegando por segundo × tempo médio que cada um passa no site.<br>
+    Gráficos ao longo da rodada: <code>relatorios/ultimo-teste.html</code>
+  </footer>
+</main>
+</body>
+</html>

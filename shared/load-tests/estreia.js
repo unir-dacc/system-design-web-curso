@@ -254,7 +254,7 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
   let status = r.status;
   let duracao = r.timings.duration;
   if (r.status === 202) {
-    // A partir da etapa 03, o pagamento continua em segundo plano: o usuário
+    // A partir da etapa 02, o pagamento continua em segundo plano: o usuário
     // acompanha o pedido até ele ser confirmado ou recusado
     const inicio = Date.now() - r.timings.duration;
     const id = r.json('id');

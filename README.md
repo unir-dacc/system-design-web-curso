@@ -69,10 +69,11 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   ├── sistema-cinema/          # sistema de assentos da rede de cinemas (rápido)
 │   ├── load-tests/estreia.js    # o teste de carga (k6)
 │   └── seed/catalogo.json       # filmes, salas e sessões
-└── 01-monolito/                 # cada etapa é completa e roda sozinha
-    ├── app/
-    ├── docker-compose.yml
-    └── DEMO.md
+├── 01-monolito/                 # cada etapa é completa e roda sozinha
+│   ├── app/
+│   ├── docker-compose.yml
+│   └── DEMO.md
+└── 02-async/                    # async + pagamento em segundo plano
 ```
 
 ## Comparação justa entre etapas

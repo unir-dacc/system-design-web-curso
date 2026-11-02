@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-relatorios/
+# A pasta vem no repositório (vazia) para o k6 conseguir escrever nela com o seu usuário
+relatorios/*
+!relatorios/.gitkeep

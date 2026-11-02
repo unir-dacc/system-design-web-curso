@@ -96,7 +96,7 @@ Pergunta: *"de todo esse tempo, quanto o Ingressa passou trabalhando de verdade?
 
 A rodada tem duas partes e leva alguns minutos:
 
-1. **A subida:** o público cresce aos poucos (1 usuário por segundo, 2, 3...). Em cada degrau, o teste confere se o site continua viável.
+1. **A subida:** o público cresce aos poucos (1 usuário por segundo, 2, 4, 8...). Em cada degrau, o teste confere se o site continua viável.
 2. **O pico:** as vendas abrem de vez, com usuários, usuários muito engajados e robôs cambistas ao mesmo tempo.
 
 Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel em http://localhost:5665:

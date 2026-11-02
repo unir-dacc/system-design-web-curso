@@ -1,0 +1,60 @@
+
+════════════════════════════════════════════════════════════════════
+  ESTREIA DO MAIOR FILME DA HISTÓRIA · Etapa 02 · Async
+════════════════════════════════════════════════════════════════════
+
+  1. A SUBIDA: até quantos usuários o Ingressa aguenta?
+
+    Aguenta até 16 usuários por segundo (≈ 40 pessoas no site ao mesmo tempo).
+    Com 32 usuários por segundo, fica inviável.
+
+    usuários/s  no site junto  compras/s  95% mapa  95% compra   erros  barrados   viável?
+             1            2        0.8      96 ms       2.1 s     0.0%      0.0%    ✅
+             2            3        1.9      80 ms       2.1 s     0.0%      0.0%    ✅
+             4            7        3.4      80 ms       2.1 s     0.0%      0.0%    ✅
+             8           13        7.6      98 ms       2.1 s     0.0%      0.0%    ✅
+            16           40       14.9     805 ms       3.1 s     0.0%      0.0%    ✅
+            32          435       19.1      6.8 s      41.1 s    11.1%      0.0%    ❌
+            64         3138        0.1     60.0 s      85.9 s    57.1%      0.0%    ❌
+           128         7644        0.0     60.0 s      32.4 s    98.3%      0.0%    ❌
+           256         9690        0.0     60.0 s           —    99.9%      0.0%    ❌
+
+  2. O PICO: 400 usuários/s + 40 engajados/s + 20 robôs, por 1 minuto
+
+    Usuários que conseguiram comprar ..... 0 de 21919  (0%)
+
+    O caminho do usuário
+      Chegaram ...................... 21919
+      Conseguiram entrar no site .... 21919  (100%)
+      Viram o mapa de assentos ...... 45  (0%)
+      Tentaram comprar .............. 45  (0%)
+      Compraram ..................... 0  (0%)
+      Desistiram (site não carregou)  21385
+      Barrados na porta (limite) .... 0
+
+    Os usuários muito engajados (nunca desistem)
+      Compraram ..................... 0 de 2199  (0%)
+      Ainda esperando no fim ........ 2199
+      Tempo até comprar ............. metade em até —, o pior —
+
+    O sistema
+      Pico de usuários ao mesmo tempo 15607
+      Requisições por segundo ....... 1.1 respondidas de 420.4 enviadas
+      Compras por segundo ........... 0.0
+      Barrados na porta ............. 0  (0.0 por segundo)
+
+    A espera
+      Abrir o mapa .... metade em até —, 95% em até 58.8 s, o pior 60.0 s
+      Comprar ......... metade em até 32.4 s, 95% em até 33.4 s, o pior 40.1 s
+
+  INGRESSOS VENDIDOS: 1999 de 24000
+
+  METAS DO PICO
+    ❌ 95% dos usuários abrem o mapa em até 2 s
+    ❌ 95% dos usuários concluem a compra em até 5 s
+    ❌ Menos de 1% de requisições com erro (99.7% com erro)
+
+  ⚠️  O Ingressa CAIU ainda na subida (com 64 usuários/s), antes de o pico começar.
+
+  Relatório para projetar: relatorios/estreia.html
+════════════════════════════════════════════════════════════════════
