@@ -26,8 +26,12 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/templates:/etc/nginx/templates:ro
     environment:
+      # Quantas requisições de cada endpoint podem estar em andamento ao mesmo tempo
+      MAX_PROGRAMACAO_SIMULTANEAS: ${MAX_PROGRAMACAO_SIMULTANEAS:-200}
+      MAX_MAPAS_SIMULTANEOS: ${MAX_MAPAS_SIMULTANEOS:-150}
+      MAX_PEDIDOS_SIMULTANEOS: ${MAX_PEDIDOS_SIMULTANEOS:-100}
       MAX_COMPRAS_SIMULTANEAS: ${MAX_COMPRAS_SIMULTANEAS:-60}
-      MAX_PAGINAS_SIMULTANEAS: ${MAX_PAGINAS_SIMULTANEAS:-80}
+      MAX_OUTROS_SIMULTANEOS: ${MAX_OUTROS_SIMULTANEOS:-50}
     ulimits:
       nofile: 65536
     depends_on:

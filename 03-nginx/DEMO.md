@@ -119,7 +119,9 @@ docker compose up -d --scale ingressa=2     # volta ao padrão
 
 ## 7. A porta: quem entra é bem atendido
 
-O Nginx deixa entrar no máximo 60 compras e 80 páginas em andamento ao mesmo tempo. Quem passa disso recebe na hora um "muita gente agora, tente de novo" (429).
+Cada endpoint tem um limite de requisições em andamento ao mesmo tempo (veja `MAX_*` no `docker-compose.yml`). Quem passa do limite recebe na hora um "muita gente agora, tente de novo" (429).
+
+Pergunta: *"por que a compra tem um limite bem menor que o mapa?"*
 
 ```bash
 # deixa só 2 compras em andamento e dispara 8 de uma vez

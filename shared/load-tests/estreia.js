@@ -232,6 +232,11 @@ export const options = {
         `compras_concluidas{degrau:${d}}`,
         `usuarios_entraram{degrau:${d}}`,
         `barrados_na_porta{degrau:${d}}`,
+        // A progressão de cada público, degrau a degrau
+        `usuarios_entraram{degrau:${d},tipo:comprador}`,
+        `usuarios_compraram{degrau:${d}}`,
+        `usuarios_entraram{degrau:${d},tipo:curioso}`,
+        `usuarios_so_olharam{degrau:${d}}`,
       ]),
     ]),
     ...guardar(
@@ -517,6 +522,11 @@ function calcularResultado(data) {
     return {
       usuariosPorSegundo: d,
       comprasPorSegundo: n(`compras_concluidas{degrau:${d}}`) / DURACAO_DEGRAU_S,
+      // Procura x vendas: quantos compradores chegaram e quantos conseguiram comprar
+      compradores: n(`usuarios_entraram{degrau:${d},tipo:comprador}`),
+      compraram: n(`usuarios_compraram{degrau:${d}}`),
+      curiosos: n(`usuarios_entraram{degrau:${d},tipo:curioso}`),
+      viramTudo: n(`usuarios_so_olharam{degrau:${d}}`),
       p95Pagina,
       p95Compra,
       erros,
@@ -576,6 +586,39 @@ function calcularResultado(data) {
       })
       .filter((e) => e.total > 0);
 
+  // A progressão: degrau a degrau, e o pico como último ponto. Em cada um,
+  // quantos compradores chegaram por segundo (a procura), quantos compraram
+  // (as vendas) e a parte de cada público que conseguiu o que queria.
+  const fracao = (parte, total) => (total ? parte / total : undefined);
+  const ponto = (rotulo, usuariosPorSegundo, duracaoS, compradores, compraram, curiosos, viramTudo, viavel) => ({
+    rotulo,
+    usuariosPorSegundo,
+    procura: compradores / duracaoS,
+    vendas: compraram / duracaoS,
+    compradoresAtendidos: fracao(compraram, compradores),
+    curiososAtendidos: fracao(viramTudo, curiosos),
+    viavel,
+  });
+  const noPico = { compradores: publico('comprador'), curiosos: publico('curioso') };
+  const progressao = [
+    ...degraus.map((d) =>
+      ponto(`${d.usuariosPorSegundo}/s`, d.usuariosPorSegundo, DURACAO_DEGRAU_S, d.compradores, d.compraram, d.curiosos, d.viramTudo, d.viavel),
+    ),
+    {
+      ...ponto(
+        `pico ${USUARIOS_NO_PICO}/s`,
+        USUARIOS_NO_PICO,
+        PICO_S,
+        noPico.compradores.chegaram,
+        noPico.compradores.compraram,
+        noPico.curiosos.chegaram,
+        noPico.curiosos.soOlharam,
+        null,
+      ),
+      pico: true,
+    },
+  ];
+
   return {
     etapa: ETAPA,
     lugares: SESSOES.length * 400,
@@ -614,6 +657,7 @@ function calcularResultado(data) {
       tempo: { mediana: v('engajados_tempo_ate_comprar').med, pior: v('engajados_tempo_ate_comprar').max },
     },
     endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: porEndpoint('pico', PICO_S) },
+    progressao,
     picoSimultaneos: v('vus').max || 0,
     vendidos: totalVendidos,
     // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
@@ -678,6 +722,13 @@ function gerarTexto(r) {
       ),
     ].join('\n');
 
+  const progressao = r.progressao.map(
+    (p) =>
+      `    ${linha(p.rotulo, 14)}${col(p.procura.toFixed(1), 10)}${col(p.vendas.toFixed(1), 11)}` +
+      `${col(pctFracao(p.compradoresAtendidos), 15)}${col(pctFracao(p.curiososAtendidos), 16)}` +
+      `    ${p.pico ? '' : p.viavel ? '✅' : '❌'}`,
+  );
+
   let capacidade;
   if (!s.capacidade) capacidade = `Não aguentou nem ${s.degraus[0].usuariosPorSegundo} usuário por segundo.`;
   else if (!s.quebrou) capacidade = `Aguentou todos os degraus (até ${usuarios(s.capacidade.usuariosPorSegundo)}/s).`;
@@ -712,6 +763,11 @@ function gerarTexto(r) {
 
     usuários/s  no site junto  compras/s  95% página 95% compra   erros  barrados   viável?
 ${degraus.join('\n')}
+
+    A progressão das vendas: a procura (compradores chegando) e as vendas, até o pico
+    ${linha('chegada', 14)}${col('queriam', 10)}${col('compraram', 11)}${col('compradores', 15)}${col('curiosos', 16)}    viável?
+    ${linha('', 14)}${col('comprar/s', 10)}${col('/s', 11)}${col('que compraram', 15)}${col('que viram tudo', 16)}
+${progressao.join('\n')}
 
     Velocidade por endpoint (a subida inteira)
 ${tabelaDeEndpoints(r.endpoints.subida)}

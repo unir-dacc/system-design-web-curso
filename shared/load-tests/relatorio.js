@@ -75,6 +75,61 @@ function comparacao(lista) {
     ${linhas.join('')}`;
 }
 
+// Procura x vendas, degrau a degrau até o pico: barras lado a lado (SVG puro)
+function graficoDaProgressao(pontos) {
+  const L = 1000, A = 340, esq = 56, dir = 12, topo = 16, base = 56;
+  const largura = L - esq - dir, altura = A - topo - base;
+  const maximo = Math.max(1, ...pontos.map((p) => Math.max(p.procura, p.vendas))) * 1.1;
+  const y = (valor) => topo + altura - (valor / maximo) * altura;
+  const grupo = largura / pontos.length;
+  const barra = grupo * 0.34;
+  const linhasDeGrade = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const valor = maximo * f;
+    return `<line x1="${esq}" x2="${L - dir}" y1="${y(valor)}" y2="${y(valor)}" stroke="#e7e2d8"/>
+      <text x="${esq - 8}" y="${y(valor) + 4}" text-anchor="end" font-size="13" fill="#78716c">${decimal(valor)}</text>`;
+  });
+  const barras = pontos.map((p, i) => {
+    const x = esq + i * grupo + grupo / 2;
+    const fundo = p.pico ? `<rect x="${esq + i * grupo}" y="${topo}" width="${grupo}" height="${altura}" fill="#fef9e7"/>` : '';
+    const cor = p.pico ? '#d4a017' : p.viavel ? '#15803d' : '#b91c1c';
+    return `${fundo}
+      <rect x="${x - barra}" y="${y(p.procura)}" width="${barra}" height="${topo + altura - y(p.procura)}" fill="#d6d3d1"><title>${p.rotulo}: ${decimal(p.procura)} queriam comprar por segundo</title></rect>
+      <rect x="${x}" y="${y(p.vendas)}" width="${barra}" height="${topo + altura - y(p.vendas)}" fill="${cor}"><title>${p.rotulo}: ${decimal(p.vendas)} compraram por segundo</title></rect>
+      <text x="${x}" y="${A - base + 22}" text-anchor="middle" font-size="13" font-weight="${p.pico ? 700 : 400}" fill="#1c1917">${p.pico ? 'pico' : p.rotulo}</text>`;
+  });
+  return `<svg viewBox="0 0 ${L} ${A}" width="100%" role="img" aria-label="Procura e vendas por segundo em cada degrau e no pico">
+    ${linhasDeGrade.join('')}
+    ${barras.join('')}
+    <text x="${esq + largura / 2}" y="${A - 8}" text-anchor="middle" font-size="13" fill="#78716c">usuários chegando por segundo</text>
+  </svg>
+  <div class="legenda">
+    <span><i style="background:#d6d3d1"></i>queriam comprar (por segundo)</span>
+    <span><i style="background:#15803d"></i>compraram, num degrau viável</span>
+    <span><i style="background:#b91c1c"></i>compraram, num degrau inviável</span>
+    <span><i style="background:#d4a017"></i>compraram, no pico</span>
+  </div>`;
+}
+
+function tabelaDaProgressao(pontos) {
+  const porcento = (fracao) => (fracao === undefined ? '—' : `${pct(fracao, 1)}%`);
+  const classe = (fracao) => (fracao === undefined ? '' : fracao >= 0.9 ? 'bom' : fracao >= 0.5 ? 'aviso' : 'ruim');
+  const linhas = pontos.map(
+    (p) => `<div class="linha-progressao ${p.pico ? 'pico' : ''}">
+      <div class="forte">${p.rotulo}</div>
+      <div>${decimal(p.procura)}/s</div>
+      <div>${decimal(p.vendas)}/s</div>
+      <div class="${classe(p.compradoresAtendidos)}">${porcento(p.compradoresAtendidos)}</div>
+      <div class="${classe(p.curiososAtendidos)}">${porcento(p.curiososAtendidos)}</div>
+      <div class="estado">${p.pico ? '' : p.viavel ? '✅' : '❌'}</div>
+    </div>`,
+  );
+  return `<div class="linha-progressao cabecalho">
+      <div>usuários chegando</div><div>queriam comprar</div><div>compraram</div>
+      <div>compradores que compraram</div><div>curiosos que viram tudo</div><div>viável?</div>
+    </div>
+    ${linhas.join('')}`;
+}
+
 function tabelaDeEndpoints(lista) {
   const porcento = (fracao) => `${decimal(fracao * 100)}%`;
   const linhas = lista.map(
@@ -194,6 +249,13 @@ const ESTILO = `
   .linha-endpoint { display: grid; grid-template-columns: 2fr repeat(6, 1fr); gap: 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--linha); }
   .linha-endpoint.cabecalho { color: var(--apagado); font-size: 13px; border-top: 0; padding-top: 0; }
   .linha-endpoint .forte { font-weight: 800; }
+  .linha-progressao { display: grid; grid-template-columns: 1.3fr repeat(4, 1fr) 70px; gap: 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--linha); }
+  .linha-progressao.cabecalho { color: var(--apagado); font-size: 13px; border-top: 0; padding-top: 0; }
+  .linha-progressao.pico { background: #fef9e7; border-radius: 10px; }
+  .linha-progressao .forte { font-weight: 800; }
+  .linha-progressao .estado { text-align: center; }
+  .legenda { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--apagado); font-size: 14px; margin-top: 8px; }
+  .legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
   @media (max-width: 700px) {
     .tripla, .publicos { grid-template-columns: 1fr; }
     .tripla > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: 20px; }
@@ -201,6 +263,7 @@ const ESTILO = `
     .linha-etapa .opcional { display: none; }
     .linha-endpoint { grid-template-columns: 1.6fr repeat(4, 1fr); font-size: 14px; }
     .linha-endpoint .opcional { display: none; }
+    .linha-progressao { grid-template-columns: 1.2fr repeat(4, 1fr) 40px; font-size: 13px; gap: 6px; padding: 10px 8px; }
   }
 </style>
 `;
@@ -291,6 +354,13 @@ export function gerarHtml(r) {
     </div>
   </section>
   ${alertas(r)}
+
+  <h2>A progressão das vendas: do primeiro usuário até o pico</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">A cada degrau chega mais gente. Enquanto as vendas acompanham a procura, o Ingressa dá conta; quando elas param de subir (ou caem), ele chegou no limite.</p>
+  <div class="bloco">
+    ${graficoDaProgressao(r.progressao)}
+  </div>
+  <div class="bloco" style="margin-top:14px">${tabelaDaProgressao(r.progressao)}</div>
 
   <h2>O ganho de cada etapa</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa. Todas com o mesmo hardware: 2 CPUs e 2 GB para o Ingressa.</p>
