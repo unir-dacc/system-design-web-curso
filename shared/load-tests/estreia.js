@@ -53,7 +53,7 @@ const ESPERA_DA_COMPRA_MS = 10 * 60 * 1000;
 
 // O que é um site "viável"
 const META_MAPA_MS = 2000;
-const META_COMPRA_MS = 3000;
+const META_COMPRA_MS = 5000; // uma compra leva ~2,7 s só esperando o cinema e o gateway
 const META_ERROS = 0.01;
 
 // Sessões e cambistas
