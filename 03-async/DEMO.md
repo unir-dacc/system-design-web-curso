@@ -1,4 +1,4 @@
-# Aula 02: Async
+# Aula 03: Async
 
 > **Objetivo:** mostrar por que o Ingressa da 01 travava esperando, e o que muda
 > quando esperar deixa de ocupar uma thread.
@@ -22,7 +22,7 @@ O hardware é o mesmo da etapa 01. O que muda é só o código do Ingressa.
 
 ## 0. Preparação (antes da aula)
 
-Todos os comandos são rodados **dentro desta pasta** (`02-async/`).
+Todos os comandos são rodados **dentro desta pasta** (`03-async/`).
 
 ```bash
 docker compose down -v          # garante que começa do zero

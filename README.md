@@ -77,7 +77,8 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   ├── app/
 │   ├── docker-compose.yml
 │   └── DEMO.md
-└── 02-async/                    # async + pagamento em segundo plano
+├── 02-cache/                    # cache das respostas iguais para todos (Redis)
+└── 03-async/                    # rascunho: vai ser refeita em cima da 02
 ```
 
 ## Comparação justa entre etapas

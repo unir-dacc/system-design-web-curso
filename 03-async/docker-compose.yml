@@ -1,7 +1,7 @@
-# Etapa 02 - Async
+# Etapa 03 - Async
 #
 # Orçamento do Ingressa: 2 CPUs e 2 GB no total, iguais em todas as etapas.
-# Nesta etapa (igual à etapa 01), eles ficam assim:
+# Nesta etapa, eles ficam assim:
 #   app:      1 CPU / 1 GB    (1 processo uvicorn, agora async)
 #   postgres: 1 CPU / 1 GB
 # Os sistemas externos vêm de ../shared/compose.externos.yml e são iguais em todas as etapas.
@@ -71,7 +71,7 @@ services:
       - ..:/curso:ro
     environment:
       BASE_URL: http://ingressa:8000
-      ETAPA: "Etapa 02 · Async"
+      ETAPA: "Etapa 03 · Async"
       # Ao final, o painel é salvo em relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD: "true"

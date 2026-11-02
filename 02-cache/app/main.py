@@ -10,14 +10,13 @@ from app.seed import carregar_catalogo
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conexao:
-        await conexao.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as db:
-        await carregar_catalogo(db)
+    Base.metadata.create_all(engine)
+    with SessionLocal() as db:
+        carregar_catalogo(db)
     yield
 
 
-app = FastAPI(title="Ingressa", version="02-async", lifespan=lifespan)
+app = FastAPI(title="Ingressa", version="02-cache", lifespan=lifespan)
 app.include_router(catalogo.router)
 app.include_router(pedidos.router)
 app.include_router(ingressos.router)
@@ -25,5 +24,5 @@ app.include_router(admin.router)
 
 
 @app.get("/health", tags=["infra"])
-async def health():
+def health():
     return {"status": "ok"}

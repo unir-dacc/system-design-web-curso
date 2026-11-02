@@ -56,7 +56,7 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
     # 1. Confere as regras e registra o pedido, tudo de uma vez
     pedido = registrar_pedido(db, sessao, dados, len(assentos), qtd_meia, subtotal, taxa)
 
-    # 2. Segura os assentos no sistema do cinema (lento)
+    # 2. Segura os assentos no sistema do cinema
     try:
         pedido.reserva_id = clients.reservar_assentos(sessao.id, assentos)
     except Exception:
@@ -84,7 +84,7 @@ def realizar_compra(db: Session, dados: CriarPedido) -> Pedido:
         db.commit()
         raise PagamentoRecusado(pedido)
 
-    # 4. Confirma a venda no cinema (lento)
+    # 4. Confirma a venda no cinema
     clients.confirmar_reserva(pedido.reserva_id)
 
     # 5. Emite os ingressos

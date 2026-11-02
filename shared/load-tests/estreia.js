@@ -34,7 +34,7 @@ const ETAPA = __ENV.ETAPA || 'Ingressa';
 
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo salvo de cada uma das outras etapas.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-async'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-async'];
 const OUTRAS_ETAPAS = new SharedArray('outras etapas', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -313,7 +313,7 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
   let status = r.status;
   let duracao = r.timings.duration;
   if (r.status === 202) {
-    // A partir da etapa 02, o pagamento continua em segundo plano: o usuário
+    // Nas etapas com pagamento em segundo plano, o usuário
     // acompanha o pedido até ele ser confirmado ou recusado
     const inicio = Date.now() - r.timings.duration;
     const id = r.json('id');
