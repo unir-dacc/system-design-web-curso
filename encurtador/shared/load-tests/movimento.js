@@ -12,7 +12,9 @@
 //        normal (um sino): poucos links muito acessados no centro, a maioria
 //        no meio-termo, e nas pontas links muito raramente acessados.
 //        Quem clica espera no máximo 5 s; depois, desiste.
-//      - quem cria links (4%) e quem abre as estatísticas de um link (1%)
+//      - quem cria links (4%), e testa o link novo na hora; 10% dos cliques
+//        também vão para links criados há pouco
+//      - quem abre as estatísticas de um link (1%)
 //      - robôs tentando códigos aleatórios, que quase nunca existem
 //
 // No final: relatorios/movimento.html (para projetar) e um resumo no terminal.
@@ -61,6 +63,8 @@ const SUBIDA_S = DEGRAUS.length * DURACAO_DEGRAU_S;
 // O público: de cada 100 requisições, 95 são cliques, 4 criam um link e 1 abre as estatísticas
 const FRACAO_CRIAR = 0.04;
 const FRACAO_ESTATISTICAS = 0.01;
+// Dos cliques, quantos vão para links criados há pouco nesta rodada
+const FRACAO_CLIQUES_EM_NOVOS = 0.1;
 // A procura pelos links segue uma curva normal sobre uma amostra de links que
 // existem: o centro da amostra é o mais acessado, e as pontas, muito raramente
 const AMOSTRA = 1000;
@@ -81,6 +85,7 @@ const ENDPOINTS = {
   redirecionar: 'GET /{codigo}',
   criar: 'POST /links',
   estatisticas: 'GET /links/{codigo}/estatisticas',
+  novo: 'GET /{codigo} (link recém-criado)',
   robo: 'GET /{codigo} (robôs, inexistente)',
 };
 const PARTES = ['subida', 'pico'];
@@ -213,6 +218,16 @@ function codigoAleatorio() {
 
 // --- Personagens ---
 
+// Os links que este usuário virtual criou nesta rodada. (Cada usuário virtual
+// do k6 tem a sua memória; eles não compartilham nada entre si.)
+const criadosAgora = [];
+
+function clicar(codigo, endpoint) {
+  // redirects: 0 — o k6 não vai até o site de destino, só mede o encurtador
+  const r = http.get(`${BASE}/${codigo}`, { redirects: 0, timeout: PACIENCIA, tags: { name: endpoint } });
+  if (medir(endpoint, r, [302])) cliquesRedirecionados.add(1);
+}
+
 export function acesso(links) {
   const sorteio = Math.random();
   if (sorteio < FRACAO_CRIAR) {
@@ -221,16 +236,22 @@ export function acesso(links) {
       timeout: '10s',
       tags: { name: 'criar' },
     });
-    return medir('criar', r, [201]);
+    if (!medir('criar', r, [201])) return;
+    const codigo = r.json('codigo');
+    criadosAgora.push(codigo);
+    if (criadosAgora.length > 50) criadosAgora.shift();
+    // Quem cria testa o link na hora, antes de compartilhar: escreveu e já leu
+    return clicar(codigo, 'novo');
   }
   if (sorteio < FRACAO_CRIAR + FRACAO_ESTATISTICAS) {
     const r = http.get(`${BASE}/links/${codigoParaClicar(links)}/estatisticas`, { timeout: PACIENCIA, tags: { name: 'estatisticas' } });
     return medir('estatisticas', r, [200]);
   }
-  const codigo = codigoParaClicar(links);
-  // redirects: 0 — o k6 não vai até o site de destino, só mede o encurtador
-  const r = http.get(`${BASE}/${codigo}`, { redirects: 0, timeout: PACIENCIA, tags: { name: 'redirecionar' } });
-  if (medir('redirecionar', r, [302])) cliquesRedirecionados.add(1);
+  // Uma parte dos cliques vai para links criados há pouco (os amigos de quem compartilhou)
+  if (criadosAgora.length && Math.random() < FRACAO_CLIQUES_EM_NOVOS) {
+    return clicar(criadosAgora[Math.floor(Math.random() * criadosAgora.length)], 'novo');
+  }
+  clicar(codigoParaClicar(links), 'redirecionar');
 }
 
 export function robo() {

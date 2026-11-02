@@ -50,7 +50,8 @@ Um evento faz todo mundo compartilhar links ao mesmo tempo. Uma rodada, duas par
    Em cada degrau o teste confere se o encurtador continua viável e descobre
    **quantas requisições por segundo ele aguenta**.
 2. **O pico:** por 1 minuto chegam 2.000 requisições por segundo: de cada 100, 95 são
-   cliques, 4 criam links e 1 abre as estatísticas. Junto, 100 robôs por segundo tentam
+   cliques, 4 criam links e 1 abre as estatísticas. Quem cria um link testa na hora, e 10%
+   dos cliques vão para links criados há pouco na rodada. Junto, 100 robôs por segundo tentam
    códigos aleatórios, que quase nunca existem. Quem clica espera no máximo 5 s.
 
 **A procura pelos links segue uma curva normal (um sino), estreita.** O teste sorteia mil
