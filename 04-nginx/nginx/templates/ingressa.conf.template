@@ -1,15 +1,18 @@
 # O Nginx fica na frente do Ingressa: recebe todas as conexões e controla
-# quantas requisições por segundo chegam até ele.
+# quantas requisições estão sendo atendidas ao mesmo tempo.
 #
-# ${LIMITE_COMPRAS_POR_S} e ${LIMITE_MAPAS_POR_S} vêm do docker-compose.yml.
+# ${MAX_COMPRAS_SIMULTANEAS} e ${MAX_MAPAS_SIMULTANEOS} vêm do docker-compose.yml.
+#
+# O limite é de requisições EM ANDAMENTO, não por segundo. Pela Lei de Little,
+# vazão = em andamento ÷ tempo de cada uma: se o Ingressa (ou o cinema) fica
+# mais rápido, as requisições terminam antes e entram mais por segundo; se
+# fica mais lento, entram menos. O limite se adapta sozinho à capacidade real,
+# e a espera dentro do Ingressa nunca passa de um certo tamanho.
 
-# Uma única "porta" para o site inteiro: no máximo LIMITE_COMPRAS_POR_S compras
-# por segundo, somando todos os usuários.
-limit_req_zone $server_name zone=compras:1m rate=${LIMITE_COMPRAS_POR_S}r/s;
-# O mapa vem do cache, mas montar o JSON de 400 assentos ainda custa CPU do
-# Ingressa: ele também precisa de um limite.
-limit_req_zone $server_name zone=mapas:1m rate=${LIMITE_MAPAS_POR_S}r/s;
-limit_req_status 429;
+limit_conn_zone $server_name zone=compras:1m;
+# O mapa vem do cache, mas montá-lo ainda custa CPU do Ingressa
+limit_conn_zone $server_name zone=mapas:1m;
+limit_conn_status 429;
 
 upstream ingressa {
     server ingressa:8000;
@@ -29,13 +32,13 @@ server {
     proxy_read_timeout 600s;
 
     location = /pedidos {
-        limit_req zone=compras burst=${LIMITE_COMPRAS_POR_S} nodelay;
+        limit_conn compras ${MAX_COMPRAS_SIMULTANEAS};
         error_page 429 = @muita_gente;
         proxy_pass http://ingressa;
     }
 
     location ~ ^/sessoes/[0-9]+/assentos$ {
-        limit_req zone=mapas burst=${LIMITE_MAPAS_POR_S} nodelay;
+        limit_conn mapas ${MAX_MAPAS_SIMULTANEOS};
         error_page 429 = @muita_gente;
         proxy_pass http://ingressa;
     }

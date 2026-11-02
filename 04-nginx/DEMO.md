@@ -40,7 +40,7 @@ git diff --no-index ../03-async/docker-compose.yml docker-compose.yml
 
 | Arquivo | O que mostrar |
 |---------|---------------|
-| `nginx/templates/ingressa.conf.template` | `limit_req_zone` e `limit_req`: quantas compras (e mapas) por segundo passam pela porta. O excesso recebe 429 |
+| `nginx/templates/ingressa.conf.template` | `limit_conn`: quantas compras (e quantos mapas) podem estar sendo atendidos **ao mesmo tempo**. O excesso recebe 429 |
 | `nginx/nginx.conf` | Um processo só, milhares de conexões: a mesma ideia do async, escrita em C |
 | `docker-compose.yml` | O Nginx agora atende na porta 8000, e o Ingressa não tem mais porta publicada |
 
@@ -83,10 +83,12 @@ Pergunta: *"é justo? Quem chegou primeiro tem alguma vantagem sobre quem chegou
 Experimente outros limites e rode a estreia de novo:
 
 ```bash
-LIMITE_COMPRAS_POR_S=4 docker compose up -d nginx
-LIMITE_COMPRAS_POR_S=20 docker compose up -d nginx
-LIMITE_COMPRAS_POR_S=8 docker compose up -d nginx      # volta ao padrão
+MAX_COMPRAS_SIMULTANEAS=4 docker compose up -d nginx
+MAX_COMPRAS_SIMULTANEAS=40 docker compose up -d nginx
+MAX_COMPRAS_SIMULTANEAS=16 docker compose up -d nginx      # volta ao padrão
 ```
+
+Pergunta: *"o limite é de compras em andamento, e não de compras por segundo. O que acontece com ele se o sistema do cinema ficar duas vezes mais rápido? E duas vezes mais lento?"*
 
 ## 5. Quem trabalhou no pico
 
