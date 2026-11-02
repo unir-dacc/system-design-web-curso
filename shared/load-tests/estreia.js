@@ -54,7 +54,6 @@ const ESPERA_DA_COMPRA = '10m';
 const META_MAPA_MS = 2000;
 const META_COMPRA_MS = 3000;
 const META_ERROS = 0.01;
-const META_FILA_MS = 10000; // com fila: 95% esperam no máximo isso para serem liberados
 
 // Sessões e cambistas
 const SESSOES = [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]; // todas da estreia, 400 lugares cada
@@ -71,10 +70,6 @@ const desistiram = new Counter('usuarios_desistiram');
 const esgotado = new Counter('usuarios_encontraram_esgotado');
 const tempoDoUsuario = new Trend('tempo_do_usuario', true); // do momento em que chega até ir embora
 
-// Fila virtual (a partir da etapa 05)
-const filaEntraram = new Counter('fila_entraram');
-const filaLiberados = new Counter('fila_liberados');
-const tempoNaFila = new Trend('tempo_na_fila', true);
 
 // Usuários muito engajados
 const engajadosChegaram = new Counter('engajados_chegaram');
@@ -97,9 +92,9 @@ const ingressosConfirmados = new Counter('ingressos_confirmados');
 const vendidos = new Gauge('ingressos_vendidos');
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
-// Não são falhas do sistema: "sair da fila" (204), erros de negócio (402, 409, 422) e a recusa na
+// Não são falhas do sistema: erros de negócio (402, 409, 422) e a recusa na
 // porta pelo limite de compras (429), que é a proteção funcionando
-http.setResponseCallback(http.expectedStatuses(200, 201, 204, 402, 409, 422, 429));
+http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422, 429));
 
 // --- Cenários ---
 
@@ -174,8 +169,6 @@ export const options = {
     // Só para guardar os números
     ...guardar([
       'usuarios_entraram{scenario:pico}',
-      'fila_entraram{scenario:pico}',
-      'fila_liberados{scenario:pico}',
       'usuarios_viram_mapa{scenario:pico}',
       'usuarios_tentaram_comprar{scenario:pico}',
       'usuarios_compraram{scenario:pico}',
@@ -190,8 +183,6 @@ export const options = {
         `compras_concluidas{degrau:${d}}`,
         `usuarios_entraram{degrau:${d}}`,
         `barrados_na_porta{degrau:${d}}`,
-        `fila_entraram{degrau:${d}}`,
-        `fila_liberados{degrau:${d}}`,
       ]),
     ]),
     ...guardar(
@@ -202,7 +193,6 @@ export const options = {
       ]),
       'max>=0',
     ),
-    ...guardar(['tempo_na_fila{scenario:pico}', ...DEGRAUS.map((d) => `tempo_na_fila{degrau:${d}}`)], 'max>=0'),
     ...guardar(DEGRAUS.map((d) => `http_req_failed{degrau:${d}}`), 'rate>=0'),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
@@ -244,12 +234,10 @@ function abrirMapa(sessao, tags = {}) {
   return r.json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
 }
 
-function comprar(sessao, cpf, itens, cartao, tags = {}, senha = null) {
+function comprar(sessao, cpf, itens, cartao, tags = {}) {
   const corpo = { sessao_id: sessao, nome: 'Cliente', cpf, email: `${cpf}@exemplo.com`, cartao_token: cartao, itens };
-  const headers = { 'Content-Type': 'application/json' };
-  if (senha !== null) headers['X-Senha-Fila'] = String(senha);
   const r = http.post(`${INGRESSA}/pedidos`, JSON.stringify(corpo), {
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     timeout: ESPERA_DA_COMPRA,
     tags: { name: 'compra', ...tags },
   });
@@ -262,58 +250,17 @@ function comprar(sessao, cpf, itens, cartao, tags = {}, senha = null) {
   return r.status;
 }
 
-// Fila virtual (a partir da etapa 05): pega uma senha e espera ser liberado,
-// consultando a posição no intervalo que o próprio Ingressa sugere.
-// Devolve a senha liberada, ou null se não conseguiu nem entrar na fila.
-function esperarNaFila(tags = {}) {
-  const entrada = http.post(`${INGRESSA}/fila`, null, { timeout: PACIENCIA, tags: { name: 'fila', ...tags } });
-  if (entrada.status !== 201) return null;
-  filaEntraram.add(1, tags);
-  let senha = entrada.json('senha');
-  const inicio = Date.now();
-  let situacao = entrada.json();
-
-  // Os usuários da subida servem só para medir a capacidade: quando o pico
-  // começa, quem ainda estava na fila vai embora e a estreia começa com a
-  // sala de espera limpa. (A fila pula as senhas abandonadas.)
-  const desistirEm = exec.scenario.name === 'subida' ? exec.scenario.startTime + SUBIDA_S * 1000 : Infinity;
-
-  while (!situacao.liberado) {
-    if (Date.now() >= desistirEm) {
-      // Avisa que está saindo ("sair da fila"): a vaga não fica esperando por ela
-      http.del(`${INGRESSA}/fila/${senha}`, null, { tags: { name: 'fila', ...tags } });
-      return null;
-    }
-    sleep(situacao.consultar_em_s || 2);
-    const r = http.get(`${INGRESSA}/fila/${senha}`, { timeout: PACIENCIA, tags: { name: 'fila', ...tags } });
-    if (r.status === 200) situacao = r.json();
-    if (situacao.expirada) {
-      // A senha foi pulada ou a janela venceu: pega outra senha e continua esperando
-      const nova = http.post(`${INGRESSA}/fila`, null, { timeout: PACIENCIA, tags: { name: 'fila', ...tags } });
-      if (nova.status !== 201) return null;
-      senha = nova.json('senha');
-      situacao = nova.json();
-    }
-  }
-  filaLiberados.add(1, tags);
-  tempoNaFila.add(Date.now() - inicio, tags);
-  return senha;
-}
-
 // --- Personagens ---
 
-export function usuario(dados) {
+export function usuario() {
   const tags = exec.scenario.name === 'subida' ? { degrau: String(degrauAtual()) } : {};
   const inicio = Date.now();
-  tentarComprar(tags, dados.temFila);
+  tentarComprar(tags);
   tempoDoUsuario.add(Date.now() - inicio, tags);
 }
 
-function tentarComprar(tags, temFila) {
+function tentarComprar(tags) {
   usuariosEntraram.add(1, tags);
-  const senha = temFila ? esperarNaFila(tags) : null;
-  if (temFila && senha === null) return;
-
   const sessao = sortear(SESSOES)[0];
   const livres = abrirMapa(sessao, tags);
   if (livres === null) return;
@@ -327,23 +274,17 @@ function tentarComprar(tags, temFila) {
   }));
   usuariosTentaramComprar.add(1, tags);
   // ~5% dos cartões são recusados
-  if (comprar(sessao, gerarCpf(), itens, `tok_usuario_${__VU}`, tags, senha) === 201) usuariosCompraram.add(1, tags);
+  if (comprar(sessao, gerarCpf(), itens, `tok_usuario_${__VU}`, tags) === 201) usuariosCompraram.add(1, tags);
 }
 
-export function engajado(dados) {
+export function engajado() {
   engajadosChegaram.add(1);
   const inicio = Date.now();
   const sessoesEsgotadas = new Set();
-  let senha = dados.temFila ? esperarNaFila() : null;
 
   // Não desiste: tenta até comprar, até esgotar tudo ou até o teste acabar
   while (sessoesEsgotadas.size < SESSOES.length) {
     engajadosTentativas.add(1);
-    if (dados.temFila && senha === null) {
-      sleep(1);
-      senha = esperarNaFila();
-      continue;
-    }
     const sessao = sortear(SESSOES.filter((s) => !sessoesEsgotadas.has(s)))[0];
     const livres = abrirMapa(sessao);
     if (livres === null) {
@@ -355,26 +296,21 @@ export function engajado(dados) {
       continue;
     }
     const itens = sortear(livres, 2).map((assento) => ({ assento, tipo: 'inteira' }));
-    const status = comprar(sessao, gerarCpf(), itens, `tok_engajado_${__VU}`, {}, senha);
-    if (status === 201) {
+    if (comprar(sessao, gerarCpf(), itens, `tok_engajado_${__VU}`) === 201) {
       engajadosCompraram.add(1);
       engajadosTempo.add(Date.now() - inicio);
       return;
     }
-    if (status === 403) senha = null; // a janela de compra venceu: volta para a fila
     sleep(1); // assento ocupado, cartão recusado ou erro: tenta de novo
   }
   engajadosEsgotado.add(1);
 }
 
-export function cambista(dados) {
+export function cambista() {
   const cpf = CPFS_CAMBISTAS[__VU % CPFS_CAMBISTAS.length];
-  // Com fila, o robô também precisa pegar senha e esperar a vez a cada compra
-  const senha = dados.temFila ? esperarNaFila() : null;
-  if (dados.temFila && senha === null) return sleep(1);
   const livres = abrirMapa(1);
   if (livres && livres.length >= 2) {
-    comprar(1, cpf, sortear(livres, 2).map((assento) => ({ assento, tipo: 'inteira' })), 'tok_aprovado', {}, senha);
+    comprar(1, cpf, sortear(livres, 2).map((assento) => ({ assento, tipo: 'inteira' })), 'tok_aprovado');
   }
   sleep(0.2);
 }
@@ -387,8 +323,7 @@ export function setup() {
   }
   // Toda rodada parte do zero (a configuração dos simuladores é mantida)
   for (const url of [INGRESSA, CINEMA, GATEWAY]) http.post(`${url}/admin/reset`);
-  // A etapa tem fila virtual?
-  return { comecou: true, temFila: http.get(`${INGRESSA}/fila`).status === 200 };
+  return { comecou: true };
 }
 
 export function teardown() {
@@ -422,7 +357,6 @@ function calcularResultado(data) {
   const p95 = (nome) => v(nome)['p(95)'] || undefined;
   const espera = (nome) => ({ mediana: v(nome).med || undefined, p95: p95(nome), pior: v(nome).max || undefined });
   // Sem nenhuma medida, o k6 considera a meta cumprida: aqui ela aparece como "não medida"
-  const temFila = Boolean(data.setup_data && data.setup_data.temFila);
   const medida = (texto, nome, semDados) =>
     p95(nome) === undefined ? { texto, ok: null, detalhe: semDados } : { texto, ok: passou(nome) };
 
@@ -434,16 +368,10 @@ function calcularResultado(data) {
     const tempoMedio = v(`tempo_do_usuario{degrau:${d}}`).avg;
     const entraram = n(`usuarios_entraram{degrau:${d}}`);
     const barrados = entraram ? n(`barrados_na_porta{degrau:${d}}`) / entraram : 0;
-    // Fila: 95% liberados em até META_FILA_MS, e praticamente todos liberados (quem
-    // nunca saiu da fila não entra no tempo medido e deixaria o resultado bonito demais)
-    const p95Fila = p95(`tempo_na_fila{degrau:${d}}`);
-    const naFila = n(`fila_entraram{degrau:${d}}`);
-    const filaOk = !temFila || (n(`fila_liberados{degrau:${d}}`) >= naFila * 0.99 && (p95Fila === undefined || p95Fila <= META_FILA_MS));
     return {
       usuariosPorSegundo: d,
       comprasPorSegundo: n(`compras_concluidas{degrau:${d}}`) / DURACAO_DEGRAU_S,
       p95Mapa,
-      p95Fila,
       p95Compra,
       erros,
       barrados,
@@ -453,8 +381,7 @@ function calcularResultado(data) {
         p95Mapa !== undefined && p95Mapa <= META_MAPA_MS &&
         p95Compra !== undefined && p95Compra <= META_COMPRA_MS &&
         erros !== undefined && erros < META_ERROS &&
-        barrados < META_ERROS && // um site que recusa gente não está atendendo todo mundo
-        filaOk,
+        barrados < META_ERROS, // um site que recusa gente não está atendendo todo mundo
     };
   });
   // Capacidade = o maior degrau viável (um degrau azarado no meio não derruba o resultado)
@@ -490,7 +417,6 @@ function calcularResultado(data) {
       funil: {
         chegaram: n('usuarios_entraram{scenario:pico}') + naoEntraram,
         entraram: n('usuarios_entraram{scenario:pico}'),
-        liberadosDaFila: temFila ? n('fila_liberados{scenario:pico}') : null,
         viramMapa: n('usuarios_viram_mapa{scenario:pico}'),
         tentaramComprar: n('usuarios_tentaram_comprar{scenario:pico}'),
         compraram: n('usuarios_compraram{scenario:pico}'),
@@ -498,11 +424,6 @@ function calcularResultado(data) {
       desistiram: n('usuarios_desistiram{scenario:pico}'),
       barrados: n('barrados_na_porta{scenario:pico}'),
       esgotado: n('usuarios_encontraram_esgotado{scenario:pico}'),
-      fila: {
-        entraram: n('fila_entraram{scenario:pico}'),
-        liberados: n('fila_liberados{scenario:pico}'),
-        espera: espera('tempo_na_fila{scenario:pico}'),
-      },
       enviadas,
       respondidas: enviadas - comErro,
       compras: n('compras_concluidas') - n('compras_concluidas{scenario:subida}'),
@@ -520,7 +441,6 @@ function calcularResultado(data) {
       tentativas: n('engajados_tentativas'),
       tempo: { mediana: v('engajados_tempo_ate_comprar').med, pior: v('engajados_tempo_ate_comprar').max },
     },
-    temFila,
     picoSimultaneos: v('vus').max || 0,
     vendidos: totalVendidos,
     // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
@@ -528,7 +448,6 @@ function calcularResultado(data) {
     metas: {
       mapaMs: META_MAPA_MS,
       compraMs: META_COMPRA_MS,
-      filaMs: META_FILA_MS,
       erros: META_ERROS,
       lista: [
         medida(`95% dos usuários abrem o mapa em até ${META_MAPA_MS / 1000} s`, 'tempo_do_mapa{scenario:pico}', 'nenhum mapa chegou a abrir'),
@@ -571,7 +490,7 @@ function gerarTexto(r) {
     (d) =>
       `    ${col(d.usuariosPorSegundo, 10)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
       `${col(d.comprasPorSegundo.toFixed(1), 11)}${col(seg(d.p95Mapa), 11)}${col(seg(d.p95Compra), 12)}` +
-      `${col(pctFracao(d.erros), 9)}${col(pctFracao(d.barrados), 10)}${r.temFila ? col(seg(d.p95Fila), 10) : ''}    ${d.viavel ? '✅' : '❌'}`,
+      `${col(pctFracao(d.erros), 9)}${col(pctFracao(d.barrados), 10)}    ${d.viavel ? '✅' : '❌'}`,
   );
 
   return `
@@ -583,7 +502,7 @@ function gerarTexto(r) {
 
     ${capacidade}
 
-    usuários/s  no site junto  compras/s  95% mapa  95% compra   erros  barrados${r.temFila ? '  95% fila' : ''}   viável?
+    usuários/s  no site junto  compras/s  95% mapa  95% compra   erros  barrados   viável?
 ${degraus.join('\n')}
 
   2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
@@ -592,11 +511,11 @@ ${degraus.join('\n')}
 
     O caminho do usuário
       Chegaram ...................... ${f.chegaram}
-      Conseguiram entrar no site .... ${f.entraram}  (${pct(f.entraram, f.chegaram)})${r.temFila ? `\n      Saíram da fila (liberados) .... ${f.liberadosDaFila}  (${pct(f.liberadosDaFila, f.chegaram)})` : ''}
+      Conseguiram entrar no site .... ${f.entraram}  (${pct(f.entraram, f.chegaram)})
       Viram o mapa de assentos ...... ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
       Tentaram comprar .............. ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
       Compraram ..................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
-      Desistiram (site não carregou)  ${p.desistiram}${r.temFila ? `\n      Ainda na fila no fim do teste . ${p.fila.entraram - p.fila.liberados}` : ''}
+      Desistiram (site não carregou)  ${p.desistiram}
       Barrados na porta (limite) .... ${p.barrados}
 
     Os usuários muito engajados (nunca desistem)
@@ -612,7 +531,7 @@ ${degraus.join('\n')}
 
     A espera
       Abrir o mapa .... metade em até ${seg(p.espera.mapa.mediana)}, 95% em até ${seg(p.espera.mapa.p95)}, o pior ${seg(p.espera.mapa.pior)}
-      Comprar ......... metade em até ${seg(p.espera.compra.mediana)}, 95% em até ${seg(p.espera.compra.p95)}, o pior ${seg(p.espera.compra.pior)}${r.temFila ? `\n      Esperar na fila . metade em até ${seg(p.fila.espera.mediana)}, 95% em até ${seg(p.fila.espera.p95)}, o pior ${seg(p.fila.espera.pior)}` : ''}
+      Comprar ......... metade em até ${seg(p.espera.compra.mediana)}, 95% em até ${seg(p.espera.compra.p95)}, o pior ${seg(p.espera.compra.pior)}
 
   INGRESSOS VENDIDOS: ${r.vendidos} de ${r.lugares}
 

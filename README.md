@@ -74,8 +74,7 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   └── DEMO.md
 ├── 02-cache/                    # cache do mapa de assentos (Redis)
 ├── 03-async/                    # async/await com o mesmo hardware
-├── 04-nginx/                    # Nginx na frente, com rate limit
-└── 05-fila/                     # fila virtual (sala de espera)
+└── 04-nginx/                    # Nginx na frente, com rate limit
 ```
 
 ## Comparação justa entre etapas

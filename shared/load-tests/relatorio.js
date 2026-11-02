@@ -43,7 +43,6 @@ function funil(f) {
   const etapas = [
     ['Chegaram', f.chegaram],
     ['Conseguiram entrar no site', f.entraram],
-    ...(f.liberadosDaFila === null ? [] : [['Saíram da fila (foram liberados)', f.liberadosDaFila]]),
     ['Viram o mapa de assentos', f.viramMapa],
     ['Tentaram comprar', f.tentaramComprar],
     ['Compraram', f.compraram],
@@ -133,14 +132,12 @@ const ESTILO = `
   }
   .degrau { display: grid; grid-template-columns: 90px repeat(6, 1fr) 70px; gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
   .degrau + .degrau { margin-top: 6px; }
-  .com-fila .degrau { grid-template-columns: 90px repeat(7, 1fr) 70px; }
   .degrau.cabecalho { color: var(--apagado); font-size: 13px; padding-top: 0; padding-bottom: 4px; }
   .degrau.viavel { background: #f0fdf4; } .degrau.inviavel { background: #fef2f2; }
   .degrau .fas { font-weight: 800; font-size: 20px; }
   .degrau .estado { font-size: 22px; text-align: center; }
   @media (max-width: 700px) {
     .degrau { grid-template-columns: 60px repeat(4, 1fr) 40px; font-size: 14px; }
-    .com-fila .degrau { grid-template-columns: 60px repeat(5, 1fr) 40px; }
     .degrau .opcional { display: none; }
   }
   .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -181,7 +178,7 @@ function vereditoCapacidade(s) {
     <p>≈ ${inteiro(s.capacidade.simultaneos)} pessoas no site ao mesmo tempo. ${quebra}</p>`;
 }
 
-function tabelaDeDegraus(s, metas, temFila) {
+function tabelaDeDegraus(s, metas) {
   const classe = (valor, limite) => (valor === undefined ? '' : valor <= limite ? 'bom' : 'ruim');
   const porcento = (fracao) => (fracao === undefined ? '—' : `${decimal(fracao * 100)}%`);
   const linhas = s.degraus.map(
@@ -193,14 +190,13 @@ function tabelaDeDegraus(s, metas, temFila) {
       <div class="${classe(d.p95Compra, metas.compraMs)}">${tempo(d.p95Compra)}</div>
       <div class="opcional ${d.erros === undefined ? '' : d.erros < metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
       <div class="${d.barrados < metas.erros ? 'bom' : 'ruim'}">${porcento(d.barrados)}</div>
-      ${temFila ? `<div class="${classe(d.p95Fila, metas.filaMs)}">${tempo(d.p95Fila)}</div>` : ''}
       <div class="estado">${d.viavel ? '✅' : '❌'}</div>
     </div>`,
   );
   return `<div class="degrau cabecalho">
       <div>usuários chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
       <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div>
-      ${temFila ? '<div>95% esperaram na fila até</div>' : ''}<div></div>
+      <div></div>
     </div>
     ${linhas.join('')}`;
 }
@@ -236,8 +232,8 @@ export function gerarHtml(r) {
   ${alertas(r)}
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% abrem o mapa em até ${tempo(r.metas.mapaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite${r.temFila ? `; com fila, 95% esperam até ${tempo(r.metas.filaMs)} para serem liberados` : ''}.</p>
-  <div class="bloco ${r.temFila ? 'com-fila' : ''}">${tabelaDeDegraus(s, r.metas, r.temFila)}</div>
+  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% abrem o mapa em até ${tempo(r.metas.mapaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
+  <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
   <h2>2 · O pico: o sistema</h2>
   <div class="cartoes">
@@ -250,7 +246,7 @@ export function gerarHtml(r) {
 
   <h2>2 · O pico: o caminho do usuário</h2>
   <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Barrados na porta: <b>${inteiro(p.barrados)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b>${r.temFila ? ` · Ainda na fila quando o teste acabou: <b>${inteiro(p.fila.entraram - p.fila.liberados)}</b>` : ''}</div>
+  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Barrados na porta: <b>${inteiro(p.barrados)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
 
   <h2>2 · O pico: os usuários muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
@@ -264,7 +260,6 @@ export function gerarHtml(r) {
   <h2>2 · O pico: a espera</h2>
   <div class="bloco">
     ${espera('Abrir o mapa', p.espera.mapa, r.metas.mapaMs)}
-    ${r.temFila ? espera('Esperar na fila', p.fila.espera, r.metas.filaMs) : ''}
     ${espera('Concluir a compra', p.espera.compra, r.metas.compraMs)}
   </div>
 
