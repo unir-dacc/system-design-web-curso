@@ -1,0 +1,56 @@
+# ${MAX_COMPRAS_SIMULTANEAS} e ${MAX_PAGINAS_SIMULTANEAS} vêm do docker-compose.yml.
+
+# Os backends. "ingressa" é o nome do serviço no docker-compose.yml: com
+# "replicas: 2", o Docker devolve o endereço dos dois, e o Nginx alterna as
+# requisições entre eles.
+upstream ingressa {
+    server ingressa:8000;
+    # Reaproveita as conexões com os backends em vez de abrir uma por requisição
+    keepalive 64;
+}
+
+# A proteção na porta: um limite de requisições EM ANDAMENTO, para o Ingressa
+# inteiro (não por usuário). Quem passa do limite recebe 429 na hora, em vez
+# de entrar numa fila que não anda.
+#
+# Por que em andamento, e não por segundo? Pela Lei de Little,
+# vazão = em andamento ÷ tempo de cada uma. Se o Ingressa (ou o gateway) fica
+# mais rápido, as requisições terminam antes e entram mais por segundo; se fica
+# mais lento, entram menos. O limite se ajusta sozinho.
+limit_conn_zone $server_name zone=compras:1m;
+limit_conn_zone $server_name zone=paginas:1m;
+limit_conn_status 429;
+
+server {
+    listen 80;
+    server_name ingressa;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    # A compra espera o gateway de pagamento: o Nginx espera junto
+    proxy_read_timeout 600s;
+
+    # Cada compra segura uma thread de um backend enquanto espera o gateway
+    location = /pedidos {
+        limit_conn compras ${MAX_COMPRAS_SIMULTANEAS};
+        error_page 429 = @muita_gente;
+        proxy_pass http://ingressa;
+    }
+
+    # A programação e o mapa
+    location ~ ^/(filmes|sessoes) {
+        limit_conn paginas ${MAX_PAGINAS_SIMULTANEAS};
+        error_page 429 = @muita_gente;
+        proxy_pass http://ingressa;
+    }
+
+    location / {
+        proxy_pass http://ingressa;
+    }
+
+    location @muita_gente {
+        default_type application/json;
+        return 429 '{"detail": "Muita gente no site agora. Tente de novo em instantes."}';
+    }
+}

@@ -113,6 +113,19 @@ const barradosNaPorta = new Counter('barrados_na_porta');
 // Tempo de quem foi ATENDIDO: um 429 responde na hora e não pode contar como "rápido"
 const tempoDaPagina = new Trend('tempo_da_pagina', true); // programação e mapa
 const tempoDaCompra = new Trend('tempo_da_compra', true);
+
+// Velocidade por endpoint (tag "endpoint") em cada parte da rodada (tag "parte")
+const ENDPOINTS = {
+  filmes: 'GET /filmes',
+  sessoes: 'GET /sessoes',
+  mapa: 'GET /sessoes/{id}/assentos',
+  compra: 'POST /pedidos',
+  pedido: 'GET /pedidos/{id}',
+};
+const PARTES = ['subida', 'pico'];
+const RESULTADOS = ['ok', 'erro', 'barrada'];
+const tempoPorEndpoint = new Trend('tempo_por_endpoint', true); // só de quem foi atendido
+const requisicoesPorEndpoint = new Counter('requisicoes_por_endpoint');
 const ingressosConfirmados = new Counter('ingressos_confirmados');
 
 // Conferidos no final
@@ -230,6 +243,18 @@ export const options = {
       'max>=0',
     ),
     ...guardar(DEGRAUS.map((d) => `http_req_failed{degrau:${d}}`), 'rate>=0'),
+    // Velocidade por endpoint, na subida e no pico
+    ...guardar(
+      PARTES.flatMap((parte) =>
+        Object.keys(ENDPOINTS).flatMap((endpoint) =>
+          RESULTADOS.map((resultado) => `requisicoes_por_endpoint{endpoint:${endpoint},parte:${parte},resultado:${resultado}}`),
+        ),
+      ),
+    ),
+    ...guardar(
+      PARTES.flatMap((parte) => Object.keys(ENDPOINTS).map((endpoint) => `tempo_por_endpoint{endpoint:${endpoint},parte:${parte}}`)),
+      'max>=0',
+    ),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
   teardownTimeout: '90s',
@@ -272,11 +297,22 @@ function pensar([minimo, maximo]) {
   sleep(minimo + Math.random() * (maximo - minimo));
 }
 
+// Conta uma requisição no seu endpoint. No pico entra todo mundo (usuários,
+// engajados e robôs); um 429 é contado à parte e não entra no tempo, para uma
+// recusa instantânea não parecer "rápida".
+function medirEndpoint(endpoint, r) {
+  const parte = exec.scenario.name === 'subida' ? 'subida' : 'pico';
+  const resultado = r.status === 429 ? 'barrada' : r.status === 0 || r.status >= 500 ? 'erro' : 'ok';
+  requisicoesPorEndpoint.add(1, { endpoint, parte, resultado });
+  if (resultado === 'ok') tempoPorEndpoint.add(r.timings.duration, { endpoint, parte });
+}
+
 // Uma página carregada pelo usuário: conta o tempo de quem foi atendido, quem
 // foi barrado na porta e quem desistiu de esperar. Devolve as respostas, ou
 // null se a página não abriu.
 function abrirPagina(requisicoes, tags) {
   const respostas = http.batch(requisicoes);
+  respostas.forEach((r, i) => medirEndpoint(requisicoes[i][3].tags.endpoint, r));
   const status = respostas.map((r) => r.status);
   if (status.includes(429)) barradosNaPorta.add(1, tags);
   else tempoDaPagina.add(Math.max(...respostas.map((r) => r.timings.duration)), tags);
@@ -286,11 +322,11 @@ function abrirPagina(requisicoes, tags) {
 
 // A programação é igual para todo mundo: os filmes e as sessões da estreia
 function abrirProgramacao(tags = {}) {
-  const params = { timeout: PACIENCIA, tags: { name: 'programacao', ...tags } };
+  const params = (endpoint) => ({ timeout: PACIENCIA, tags: { name: 'programacao', endpoint, ...tags } });
   return abrirPagina(
     [
-      ['GET', `${INGRESSA}/filmes`, null, params],
-      ['GET', `${INGRESSA}/sessoes?filme_id=1`, null, params],
+      ['GET', `${INGRESSA}/filmes`, null, params('filmes')],
+      ['GET', `${INGRESSA}/sessoes?filme_id=1`, null, params('sessoes')],
     ],
     tags,
   );
@@ -298,7 +334,7 @@ function abrirProgramacao(tags = {}) {
 
 function abrirMapa(sessao, tags = {}) {
   const timeout = exec.scenario.name === 'engajados' ? ESPERA_DA_COMPRA : PACIENCIA;
-  const params = { timeout, tags: { name: 'mapa', ...tags } };
+  const params = { timeout, tags: { name: 'mapa', endpoint: 'mapa', ...tags } };
   const respostas = abrirPagina([['GET', `${INGRESSA}/sessoes/${sessao}/assentos`, null, params]], tags);
   if (respostas === null) return null;
   return respostas[0].json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
@@ -309,8 +345,9 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
   const r = http.post(`${INGRESSA}/pedidos`, JSON.stringify(corpo), {
     headers: { 'Content-Type': 'application/json' },
     timeout: ESPERA_DA_COMPRA,
-    tags: { name: 'compra', ...tags },
+    tags: { name: 'compra', endpoint: 'compra', ...tags },
   });
+  medirEndpoint('compra', r);
   let status = r.status;
   let duracao = r.timings.duration;
   if (r.status === 202) {
@@ -321,7 +358,8 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
     status = 0;
     while (Date.now() - inicio < ESPERA_DA_COMPRA_MS) {
       sleep(0.5);
-      const p = http.get(`${INGRESSA}/pedidos/${id}`, { timeout: PACIENCIA, tags: { name: 'pedido', ...tags } });
+      const p = http.get(`${INGRESSA}/pedidos/${id}`, { timeout: PACIENCIA, tags: { name: 'pedido', endpoint: 'pedido', ...tags } });
+      medirEndpoint('pedido', p);
       const situacao = p.status === 200 ? p.json('status') : null;
       if (situacao === 'confirmado') status = 201;
       if (situacao === 'pagamento_recusado' || situacao === 'cancelado') status = 402;
@@ -518,6 +556,26 @@ function calcularResultado(data) {
     };
   };
 
+  // Velocidade por endpoint em cada parte (só aparecem os endpoints que foram chamados)
+  const porEndpoint = (parte, duracaoS) =>
+    Object.entries(ENDPOINTS)
+      .map(([endpoint, nome]) => {
+        const conta = (resultado) => n(`requisicoes_por_endpoint{endpoint:${endpoint},parte:${parte},resultado:${resultado}}`);
+        const total = conta('ok') + conta('erro') + conta('barrada');
+        const tempo = v(`tempo_por_endpoint{endpoint:${endpoint},parte:${parte}}`);
+        return {
+          nome,
+          porSegundo: total / duracaoS,
+          mediana: tempo.med || undefined,
+          p95: tempo['p(95)'] || undefined,
+          pior: tempo.max || undefined,
+          erros: total ? conta('erro') / total : 0,
+          barradas: total ? conta('barrada') / total : 0,
+          total,
+        };
+      })
+      .filter((e) => e.total > 0);
+
   return {
     etapa: ETAPA,
     lugares: SESSOES.length * 400,
@@ -555,6 +613,7 @@ function calcularResultado(data) {
       tentativas: n('engajados_tentativas'),
       tempo: { mediana: v('engajados_tempo_ate_comprar').med, pior: v('engajados_tempo_ate_comprar').max },
     },
+    endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: porEndpoint('pico', PICO_S) },
     picoSimultaneos: v('vus').max || 0,
     vendidos: totalVendidos,
     // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
@@ -609,6 +668,16 @@ function gerarTexto(r) {
   const e = r.engajados;
   const porSeg = (total) => (total / p.duracaoS).toFixed(1);
 
+  const tabelaDeEndpoints = (lista) =>
+    [
+      `    ${linha('endpoint', 28)}${col('req/s', 8)}${col('metade em', 11)}${col('95% em', 9)}${col('o pior', 9)}${col('erros', 8)}${col('barradas', 10)}`,
+      ...lista.map(
+        (e) =>
+          `    ${linha(e.nome, 28)}${col(e.porSegundo.toFixed(1), 8)}${col(seg(e.mediana), 11)}${col(seg(e.p95), 9)}` +
+          `${col(seg(e.pior), 9)}${col(pctFracao(e.erros), 8)}${col(pctFracao(e.barradas), 10)}`,
+      ),
+    ].join('\n');
+
   let capacidade;
   if (!s.capacidade) capacidade = `Não aguentou nem ${s.degraus[0].usuariosPorSegundo} usuário por segundo.`;
   else if (!s.quebrou) capacidade = `Aguentou todos os degraus (até ${usuarios(s.capacidade.usuariosPorSegundo)}/s).`;
@@ -644,6 +713,9 @@ function gerarTexto(r) {
     usuários/s  no site junto  compras/s  95% página 95% compra   erros  barrados   viável?
 ${degraus.join('\n')}
 
+    Velocidade por endpoint (a subida inteira)
+${tabelaDeEndpoints(r.endpoints.subida)}
+
   2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
 
     Quem só queria olhar (curiosos) ......... ${pct(cu.soOlharam, cu.chegaram)} conseguiu ver tudo
@@ -665,6 +737,9 @@ ${degraus.join('\n')}
     A espera
       Abrir uma página  metade em até ${seg(p.espera.pagina.mediana)}, 95% em até ${seg(p.espera.pagina.p95)}, o pior ${seg(p.espera.pagina.pior)}
       Comprar ......... metade em até ${seg(p.espera.compra.mediana)}, 95% em até ${seg(p.espera.compra.p95)}, o pior ${seg(p.espera.compra.pior)}
+
+    Velocidade por endpoint (todos os públicos)
+${tabelaDeEndpoints(r.endpoints.pico)}
 
   INGRESSOS VENDIDOS: ${r.vendidos} de ${r.lugares}
 

@@ -75,6 +75,26 @@ function comparacao(lista) {
     ${linhas.join('')}`;
 }
 
+function tabelaDeEndpoints(lista) {
+  const porcento = (fracao) => `${decimal(fracao * 100)}%`;
+  const linhas = lista.map(
+    (e) => `<div class="linha-endpoint">
+      <div><code>${e.nome}</code></div>
+      <div>${decimal(e.porSegundo)}/s</div>
+      <div>${tempo(e.mediana)}</div>
+      <div class="forte">${tempo(e.p95)}</div>
+      <div class="opcional">${tempo(e.pior)}</div>
+      <div class="${e.erros < 0.01 ? 'bom' : 'ruim'}">${porcento(e.erros)}</div>
+      <div class="opcional">${porcento(e.barradas)}</div>
+    </div>`,
+  );
+  return `<div class="linha-endpoint cabecalho">
+      <div>endpoint</div><div>requisições</div><div>metade em até</div><div>95% em até</div>
+      <div class="opcional">o pior</div><div>erros</div><div class="opcional">barradas na porta</div>
+    </div>
+    ${linhas.join('')}`;
+}
+
 function espera(nome, e, limiteMs) {
   const classe = (ms) => (ms === undefined ? '' : ms <= limiteMs ? 'bom' : 'ruim');
   return `<div class="espera">
@@ -171,11 +191,16 @@ const ESTILO = `
   .linha-etapa.atual { background: #fef9e7; outline: 2px solid var(--ouro); }
   .linha-etapa span { display: block; color: var(--apagado); font-size: 13px; }
   .linha-etapa .forte { font-weight: 800; font-size: 22px; }
+  .linha-endpoint { display: grid; grid-template-columns: 2fr repeat(6, 1fr); gap: 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--linha); }
+  .linha-endpoint.cabecalho { color: var(--apagado); font-size: 13px; border-top: 0; padding-top: 0; }
+  .linha-endpoint .forte { font-weight: 800; }
   @media (max-width: 700px) {
     .tripla, .publicos { grid-template-columns: 1fr; }
     .tripla > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: 20px; }
     .linha-etapa { grid-template-columns: 1.4fr repeat(4, 1fr); font-size: 14px; }
     .linha-etapa .opcional { display: none; }
+    .linha-endpoint { grid-template-columns: 1.6fr repeat(4, 1fr); font-size: 14px; }
+    .linha-endpoint .opcional { display: none; }
   }
 </style>
 `;
@@ -275,6 +300,10 @@ export function gerarHtml(r) {
   <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% das páginas (programação e mapa) abrem em até ${tempo(r.metas.paginaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
+  <h2>1 · A subida: a velocidade de cada endpoint</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">A subida inteira, todos os degraus juntos. O tempo é só de quem foi atendido: quem foi barrado na porta aparece à parte.</p>
+  <div class="bloco">${tabelaDeEndpoints(r.endpoints.subida)}</div>
+
   <h2>2 · O pico: cada público conseguiu o que queria?</h2>
   <div class="publicos">
     <div class="bloco">
@@ -324,6 +353,12 @@ export function gerarHtml(r) {
   <div class="bloco">
     ${espera('Abrir uma página', p.espera.pagina, r.metas.paginaMs)}
     ${espera('Concluir a compra', p.espera.compra, r.metas.compraMs)}
+  </div>
+
+  <h2>2 · O pico: a velocidade de cada endpoint</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">Todos os públicos juntos: usuários, engajados e robôs.</p>
+  <div class="bloco">
+    ${tabelaDeEndpoints(r.endpoints.pico)}
   </div>
 
   <h2>Metas do pico</h2>
