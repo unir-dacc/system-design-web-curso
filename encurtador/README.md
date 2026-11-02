@@ -24,6 +24,7 @@ docker compose down -v                                           # derruba e apa
 | Etapa | Tema |
 |-------|------|
 | `01-monolito` | O ponto de partida: FastAPI síncrono e Postgres |
+| `02-consertos` | O que a 01 fazia de mais ingênuo com o banco: índice, códigos inventados, limites de tempo |
 
 ## O encurtador
 
