@@ -68,10 +68,11 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 │   ├── sistema-cinema/          # sistema de assentos legado (lento, com fila)
 │   ├── load-tests/estreia.js    # o teste de carga (k6)
 │   └── seed/catalogo.json       # filmes, salas e sessões
-└── 01-monolito/                 # cada etapa é completa e roda sozinha
-    ├── app/
-    ├── docker-compose.yml
-    └── DEMO.md
+├── 01-monolito/                 # cada etapa é completa e roda sozinha
+│   ├── app/
+│   ├── docker-compose.yml
+│   └── DEMO.md
+└── 02-cache/                    # cache do mapa de assentos (Redis)
 ```
 
 ## Comparação justa entre etapas

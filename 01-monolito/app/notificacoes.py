@@ -9,7 +9,7 @@ from app.models import Pedido, Sessao
 
 
 def gerar_qrcode_png(codigo: str) -> bytes:
-    # Gerar imagem é trabalho de CPU, não de I/O. Guarde isso para a aula 06.
+    # Gerar imagem é trabalho de CPU, não de I/O.
     imagem = qrcode.make(f"INGRESSA:{codigo}", box_size=10, border=2)
     buffer = io.BytesIO()
     imagem.save(buffer, format="PNG")

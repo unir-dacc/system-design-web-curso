@@ -14,7 +14,7 @@ router = APIRouter(tags=["catálogo"])
 
 
 def para_sessao_out(sessao: Sessao) -> SessaoOut:
-    # ⚠️ PROPOSITAL (aula 04): cada .filme e .sala abaixo dispara uma consulta
+    # ⚠️ PROPOSITAL: cada .filme e .sala abaixo dispara uma consulta
     # extra no banco (problema N+1).
     return SessaoOut(
         id=sessao.id,
@@ -57,7 +57,7 @@ def detalhar_sessao(sessao_id: int, db: Session = Depends(get_db)):
 @router.get("/sessoes/{sessao_id}/assentos", response_model=MapaDeAssentosOut)
 def mapa_de_assentos(sessao_id: int, db: Session = Depends(get_db)):
     buscar_sessao(db, sessao_id)
-    # ⚠️ PROPOSITAL (aula 05): toda visita ao mapa consulta o sistema do cinema, que é lento.
+    # ⚠️ PROPOSITAL: toda visita ao mapa consulta o sistema do cinema, que é lento.
     assentos = clients.buscar_mapa(sessao_id)
     return MapaDeAssentosOut(
         sessao_id=sessao_id,

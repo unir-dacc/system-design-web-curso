@@ -7,5 +7,5 @@ COPY app ./app
 EXPOSE 8000
 HEALTHCHECK --interval=2s --timeout=2s --retries=30 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
-# Um único processo. Veremos por que isso é um problema na aula 02.
+# Um único processo.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
