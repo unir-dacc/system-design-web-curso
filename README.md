@@ -10,7 +10,7 @@ problema que a turma acabou de ver acontecer num teste de carga.
 | Lab | A aplicação | O que ele ensina |
 |-----|-------------|------------------|
 | [`ingressa/`](ingressa/) | **Ingressa**: venda de ingressos de cinema na estreia do maior filme da história | picos de acesso, cache, balanceamento, rate limit, filas, sala de espera, hardware e linguagem |
-| [`encurtador/`](encurtador/) | Um **encurtador de URL** com links que viralizam | os problemas de banco de dados: índices, contadores disputados, conexões, réplicas, crescimento das tabelas *(em construção)* |
+| [`encurtador/`](encurtador/) | Um **encurtador de URL** no dia de mais movimento | os problemas de banco de dados: índices, contadores disputados, conexões, réplicas, crescimento das tabelas *(em construção)* |
 
 Cada lab tem o seu próprio `README.md`, e cada etapa tem um `DEMO.md`: o roteiro da aula, com os comandos na ordem.
 

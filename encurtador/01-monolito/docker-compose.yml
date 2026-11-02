@@ -46,7 +46,7 @@ services:
           memory: 1G
 
   # Gerador de carga. Não sobe com "up"; é usado com:
-  #   docker compose run --rm --service-ports k6 run /scripts/viral.js
+  #   docker compose run --rm --service-ports k6 run /scripts/movimento.js
   # Painel em tempo real: http://localhost:5665 (o --service-ports publica a porta)
   k6:
     image: grafana/k6:0.54.0

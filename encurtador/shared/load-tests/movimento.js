@@ -15,9 +15,9 @@
 //      - quem cria links (4%) e quem abre as estatísticas de um link (1%)
 //      - robôs tentando códigos aleatórios, que quase nunca existem
 //
-// No final: relatorios/viral.html (para projetar) e um resumo no terminal.
+// No final: relatorios/movimento.html (para projetar) e um resumo no terminal.
 //
-//   docker compose run --rm --service-ports k6 run /scripts/viral.js
+//   docker compose run --rm --service-ports k6 run /scripts/movimento.js
 
 import http from 'k6/http';
 import exec from 'k6/execution';
@@ -31,14 +31,14 @@ const ETAPA = __ENV.ETAPA || 'Encurtador';
 // O hardware do encurtador nesta etapa (aparece na comparação entre etapas)
 const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 
-// Cada rodada salva um resumo em relatorios/viral.json. O relatório compara a
+// Cada rodada salva um resumo em relatorios/movimento.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
 const PASTAS_DAS_ETAPAS = ['01-monolito'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
-      return [JSON.parse(open(`/curso/${pasta}/relatorios/viral.json`))];
+      return [JSON.parse(open(`/curso/${pasta}/relatorios/movimento.json`))];
     } catch (e) {
       return []; // essa etapa ainda não rodou o teste
     }
@@ -454,7 +454,7 @@ ${s.caiuEm ? `\n  ⚠️  O encurtador CAIU ainda na subida (com ${s.caiuEm.porS
                                                              no pico     no pico    contados
 ${comparacao.join('\n')}
 
-  Relatório para projetar: relatorios/viral.html
+  Relatório para projetar: relatorios/movimento.html
 ════════════════════════════════════════════════════════════════════
 `;
 }
@@ -468,8 +468,8 @@ export function handleSummary(data) {
   resultado.comparacao = [...ETAPAS_ANTERIORES, { ...resumo, atual: true }].sort((a, b) => a.etapa.localeCompare(b.etapa));
   return {
     stdout: gerarTexto(resultado),
-    '/relatorios/viral.txt': gerarTexto(resultado),
-    '/relatorios/viral.html': gerarHtml(resultado),
-    '/relatorios/viral.json': JSON.stringify(resumo, null, 2),
+    '/relatorios/movimento.txt': gerarTexto(resultado),
+    '/relatorios/movimento.html': gerarHtml(resultado),
+    '/relatorios/movimento.json': JSON.stringify(resumo, null, 2),
   };
 }

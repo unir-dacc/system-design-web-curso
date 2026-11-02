@@ -13,7 +13,7 @@ Cada etapa é uma pasta independente. A partir da raiz do repositório:
 cd encurtador/01-monolito
 
 docker compose up -d --build --wait                              # sobe a etapa (a primeira vez cria 1 milhão de links)
-docker compose run --rm --service-ports k6 run /scripts/viral.js # teste de carga
+docker compose run --rm --service-ports k6 run /scripts/movimento.js # teste de carga
 docker compose stats                                             # CPU/memória em tempo real
 docker compose exec postgres psql -U encurtador                  # banco
 docker compose down -v                                           # derruba e apaga os dados
@@ -42,7 +42,7 @@ Na primeira subida, o encurtador cria **1 milhão de links** (para mudar:
 
 ## O teste de carga
 
-Um único teste, `shared/load-tests/viral.js`: **o dia em que o encurtador bombou**.
+Um único teste, `shared/load-tests/movimento.js`: **o dia em que o encurtador bombou**.
 Um evento faz todo mundo compartilhar links ao mesmo tempo. Uma rodada, duas partes:
 
 1. **A subida:** as requisições chegam em degraus (5 por segundo, 10, 20, 30...).
@@ -57,7 +57,7 @@ links que existem: os poucos do centro da curva concentram os cliques, os do mei
 recebem bem menos, e os das pontas são muito raramente acessados.
 
 - **Durante:** painel em tempo real em **http://localhost:5665**
-- **Depois:** relatório em **`relatorios/viral.html`**, com a capacidade, a progressão
+- **Depois:** relatório em **`relatorios/movimento.html`**, com a capacidade, a progressão
   até o pico, a velocidade de cada endpoint, a conferência dos cliques (quantos foram
   redirecionados e quantos o encurtador contou) e a comparação com as etapas anteriores.
 

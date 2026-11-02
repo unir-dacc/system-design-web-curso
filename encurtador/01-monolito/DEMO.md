@@ -65,8 +65,8 @@ Pergunta: *"por que procurar pelo `id` é tão diferente de procurar pelo `codig
 Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel em http://localhost:5665:
 
 ```bash
-docker compose run --rm --service-ports k6 run /scripts/viral.js
-xdg-open relatorios/viral.html
+docker compose run --rm --service-ports k6 run /scripts/movimento.js
+xdg-open relatorios/movimento.html
 ```
 
 | Bloco | Perguntas |
