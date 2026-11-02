@@ -130,14 +130,14 @@ const ESTILO = `
     .espera { grid-template-columns: 1fr 1fr 1fr; }
     .espera .nome { grid-column: 1 / -1; }
   }
-  .degrau { display: grid; grid-template-columns: 90px repeat(5, 1fr) 70px; gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
+  .degrau { display: grid; grid-template-columns: 90px repeat(6, 1fr) 70px; gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
   .degrau + .degrau { margin-top: 6px; }
   .degrau.cabecalho { color: var(--apagado); font-size: 13px; padding-top: 0; padding-bottom: 4px; }
   .degrau.viavel { background: #f0fdf4; } .degrau.inviavel { background: #fef2f2; }
   .degrau .fas { font-weight: 800; font-size: 20px; }
   .degrau .estado { font-size: 22px; text-align: center; }
   @media (max-width: 700px) {
-    .degrau { grid-template-columns: 60px repeat(3, 1fr) 40px; font-size: 14px; }
+    .degrau { grid-template-columns: 60px repeat(4, 1fr) 40px; font-size: 14px; }
     .degrau .opcional { display: none; }
   }
   .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -189,12 +189,13 @@ function tabelaDeDegraus(s, metas) {
       <div class="${classe(d.p95Mapa, metas.mapaMs)}">${tempo(d.p95Mapa)}</div>
       <div class="${classe(d.p95Compra, metas.compraMs)}">${tempo(d.p95Compra)}</div>
       <div class="opcional ${d.erros === undefined ? '' : d.erros < metas.erros ? 'bom' : 'ruim'}">${porcento(d.erros)}</div>
+      <div class="${d.barrados < metas.erros ? 'bom' : 'ruim'}">${porcento(d.barrados)}</div>
       <div class="estado">${d.viavel ? '✅' : '❌'}</div>
     </div>`,
   );
   return `<div class="degrau cabecalho">
       <div>usuários chegando</div><div>pessoas no site ao mesmo tempo</div><div class="opcional">compras</div>
-      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div></div>
+      <div>95% abriram o mapa em até</div><div>95% compraram em até</div><div class="opcional">erros</div><div>barrados na porta</div><div></div>
     </div>
     ${linhas.join('')}`;
 }
@@ -230,7 +231,7 @@ export function gerarHtml(r) {
   ${alertas(r)}
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Em cada degrau, conferimos se o site continua viável.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% abrem o mapa em até ${tempo(r.metas.mapaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
   <h2>2 · O pico: o sistema</h2>
@@ -239,11 +240,12 @@ export function gerarHtml(r) {
     ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'esperando uma resposta no mesmo instante')}
     ${cartao('Requisições respondidas', `${porSeg(p.respondidas)}/s`, `de ${porSeg(p.enviadas)}/s enviadas`, pct(p.respondidas, p.enviadas))}
     ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras no pico`)}
+    ${cartao('Barrados na porta', `${porSeg(p.barradosNaPorta)}/s`, `${inteiro(p.barradosNaPorta)} requisições recusadas pelo limite`)}
   </div>
 
   <h2>2 · O pico: o caminho do usuário</h2>
   <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
+  <div class="detalhe" style="margin-top:10px">Desistiram porque o site não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Barrados na porta: <b>${inteiro(p.barrados)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
 
   <h2>2 · O pico: os usuários muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>

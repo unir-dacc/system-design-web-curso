@@ -79,13 +79,21 @@ const engajadosTempo = new Trend('engajados_tempo_ate_comprar', true);
 
 // Compras e ingressos que o comprador viu confirmados
 const comprasConcluidas = new Counter('compras_concluidas');
+// Requisições recusadas na porta pelo limite (429, a partir da etapa 04)
+const barradosNaPorta = new Counter('barrados_na_porta');
+
+// Tempo de quem foi ATENDIDO: um 429 responde na hora e não pode contar como "rápido"
+const tempoDoMapa = new Trend('tempo_do_mapa', true);
+const tempoDaCompra = new Trend('tempo_da_compra', true);
 const ingressosConfirmados = new Counter('ingressos_confirmados');
 
 // Conferidos no final
 const vendidos = new Gauge('ingressos_vendidos');
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
-http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422)); // erros de negócio não são falhas
+// Não são falhas do sistema: erros de negócio (402, 409, 422) e a recusa na
+// porta pelo limite de compras (429), que é a proteção funcionando
+http.setResponseCallback(http.expectedStatuses(200, 201, 402, 409, 422, 429));
 
 // --- Cenários ---
 
@@ -146,8 +154,8 @@ export const options = {
   },
   thresholds: {
     // Metas do pico
-    'http_req_duration{name:mapa,scenario:pico}': [`p(95)<${META_MAPA_MS}`],
-    'http_req_duration{name:compra,scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
+    'tempo_do_mapa{scenario:pico}': [`p(95)<${META_MAPA_MS}`],
+    'tempo_da_compra{scenario:pico}': [`p(95)<${META_COMPRA_MS}`],
     'http_req_failed{scenario:subida}': ['rate>=0'], // para separar os erros do pico (conta feita no resultado)
 
     // Só para guardar os números
@@ -161,12 +169,18 @@ export const options = {
       'dropped_iterations{scenario:pico}',
       'http_reqs{scenario:subida}',
       'compras_concluidas{scenario:subida}',
-      ...DEGRAUS.flatMap((d) => [`compras_concluidas{degrau:${d}}`, `usuarios_entraram{degrau:${d}}`]),
+      'barrados_na_porta{scenario:subida}',
+      'barrados_na_porta{scenario:pico}',
+      ...DEGRAUS.flatMap((d) => [
+        `compras_concluidas{degrau:${d}}`,
+        `usuarios_entraram{degrau:${d}}`,
+        `barrados_na_porta{degrau:${d}}`,
+      ]),
     ]),
     ...guardar(
       DEGRAUS.flatMap((d) => [
-        `http_req_duration{name:mapa,degrau:${d}}`,
-        `http_req_duration{name:compra,degrau:${d}}`,
+        `tempo_do_mapa{degrau:${d}}`,
+        `tempo_da_compra{degrau:${d}}`,
         `tempo_do_usuario{degrau:${d}}`,
       ]),
       'max>=0',
@@ -205,6 +219,8 @@ function degrauAtual() {
 function abrirMapa(sessao, tags = {}) {
   const timeout = exec.scenario.name === 'engajados' ? ESPERA_DA_COMPRA : PACIENCIA;
   const r = http.get(`${INGRESSA}/sessoes/${sessao}/assentos`, { timeout, tags: { name: 'mapa', ...tags } });
+  if (r.status === 429) barradosNaPorta.add(1, tags);
+  else tempoDoMapa.add(r.timings.duration, tags);
   if (r.status === 0 && souUsuarioComum()) desistiram.add(1, tags);
   if (r.status !== 200) return null;
   return r.json('assentos').filter((a) => a.status === 'livre').map((a) => a.codigo);
@@ -221,6 +237,8 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
     comprasConcluidas.add(1, tags);
     ingressosConfirmados.add(itens.length, tags);
   }
+  if (r.status === 429) barradosNaPorta.add(1, tags);
+  else tempoDaCompra.add(r.timings.duration, tags);
   return r.status;
 }
 
@@ -335,22 +353,26 @@ function calcularResultado(data) {
 
   // 1. A subida
   const degraus = DEGRAUS.map((d) => {
-    const p95Mapa = p95(`http_req_duration{name:mapa,degrau:${d}}`);
-    const p95Compra = p95(`http_req_duration{name:compra,degrau:${d}}`);
+    const p95Mapa = p95(`tempo_do_mapa{degrau:${d}}`);
+    const p95Compra = p95(`tempo_da_compra{degrau:${d}}`);
     const erros = v(`http_req_failed{degrau:${d}}`).rate;
     const tempoMedio = v(`tempo_do_usuario{degrau:${d}}`).avg;
+    const entraram = n(`usuarios_entraram{degrau:${d}}`);
+    const barrados = entraram ? n(`barrados_na_porta{degrau:${d}}`) / entraram : 0;
     return {
       usuariosPorSegundo: d,
       comprasPorSegundo: n(`compras_concluidas{degrau:${d}}`) / DURACAO_DEGRAU_S,
       p95Mapa,
       p95Compra,
       erros,
+      barrados,
       // Lei de Little: pessoas no site ao mesmo tempo = chegada por segundo × tempo que cada uma fica
       simultaneos: tempoMedio ? Math.round((d * tempoMedio) / 1000) : undefined,
       viavel:
         p95Mapa !== undefined && p95Mapa <= META_MAPA_MS &&
         p95Compra !== undefined && p95Compra <= META_COMPRA_MS &&
-        erros !== undefined && erros < META_ERROS,
+        erros !== undefined && erros < META_ERROS &&
+        barrados < META_ERROS, // um site que recusa gente não está atendendo todo mundo
     };
   });
   // Capacidade = o maior degrau viável (um degrau azarado no meio não derruba o resultado)
@@ -391,13 +413,16 @@ function calcularResultado(data) {
         compraram: n('usuarios_compraram{scenario:pico}'),
       },
       desistiram: n('usuarios_desistiram{scenario:pico}'),
+      barrados: n('barrados_na_porta{scenario:pico}'),
       esgotado: n('usuarios_encontraram_esgotado{scenario:pico}'),
       enviadas,
       respondidas: enviadas - comErro,
       compras: n('compras_concluidas') - n('compras_concluidas{scenario:subida}'),
+      // Todas as recusas na porta no pico: usuários comuns, engajados e robôs
+      barradosNaPorta: n('barrados_na_porta') - n('barrados_na_porta{scenario:subida}'),
       espera: {
-        mapa: espera('http_req_duration{name:mapa,scenario:pico}'),
-        compra: espera('http_req_duration{name:compra,scenario:pico}'),
+        mapa: espera('tempo_do_mapa{scenario:pico}'),
+        compra: espera('tempo_da_compra{scenario:pico}'),
       },
     },
     engajados: {
@@ -416,8 +441,8 @@ function calcularResultado(data) {
       compraMs: META_COMPRA_MS,
       erros: META_ERROS,
       lista: [
-        medida(`95% dos usuários abrem o mapa em até ${META_MAPA_MS / 1000} s`, 'http_req_duration{name:mapa,scenario:pico}', 'nenhum mapa chegou a abrir'),
-        medida(`95% dos usuários concluem a compra em até ${META_COMPRA_MS / 1000} s`, 'http_req_duration{name:compra,scenario:pico}', 'ninguém chegou a comprar'),
+        medida(`95% dos usuários abrem o mapa em até ${META_MAPA_MS / 1000} s`, 'tempo_do_mapa{scenario:pico}', 'nenhum mapa chegou a abrir'),
+        medida(`95% dos usuários concluem a compra em até ${META_COMPRA_MS / 1000} s`, 'tempo_da_compra{scenario:pico}', 'ninguém chegou a comprar'),
         {
           texto: 'Menos de 1% de requisições com erro',
           ok: enviadas ? comErro / enviadas < META_ERROS : null,
@@ -456,7 +481,7 @@ function gerarTexto(r) {
     (d) =>
       `    ${col(d.usuariosPorSegundo, 10)}${col(d.simultaneos === undefined ? '—' : d.simultaneos, 13)}` +
       `${col(d.comprasPorSegundo.toFixed(1), 11)}${col(seg(d.p95Mapa), 11)}${col(seg(d.p95Compra), 12)}` +
-      `${col(pctFracao(d.erros), 9)}    ${d.viavel ? '✅' : '❌'}`,
+      `${col(pctFracao(d.erros), 9)}${col(pctFracao(d.barrados), 10)}    ${d.viavel ? '✅' : '❌'}`,
   );
 
   return `
@@ -468,7 +493,7 @@ function gerarTexto(r) {
 
     ${capacidade}
 
-    usuários/s  no site junto  compras/s  95% mapa  95% compra   erros   viável?
+    usuários/s  no site junto  compras/s  95% mapa  95% compra   erros  barrados   viável?
 ${degraus.join('\n')}
 
   2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
@@ -482,6 +507,7 @@ ${degraus.join('\n')}
       Tentaram comprar .............. ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
       Compraram ..................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
       Desistiram (site não carregou)  ${p.desistiram}
+      Barrados na porta (limite) .... ${p.barrados}
 
     Os usuários muito engajados (nunca desistem)
       Compraram ..................... ${e.compraram} de ${e.chegaram}  (${pct(e.compraram, e.chegaram)})
@@ -492,6 +518,7 @@ ${degraus.join('\n')}
       Pico de usuários ao mesmo tempo ${r.picoSimultaneos}
       Requisições por segundo ....... ${porSeg(p.respondidas)} respondidas de ${porSeg(p.enviadas)} enviadas
       Compras por segundo ........... ${porSeg(p.compras)}
+      Barrados na porta ............. ${p.barradosNaPorta}  (${porSeg(p.barradosNaPorta)} por segundo)
 
     A espera
       Abrir o mapa .... metade em até ${seg(p.espera.mapa.mediana)}, 95% em até ${seg(p.espera.mapa.p95)}, o pior ${seg(p.espera.mapa.pior)}
