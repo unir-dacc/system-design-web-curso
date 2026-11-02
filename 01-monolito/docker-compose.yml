@@ -67,6 +67,8 @@ services:
     volumes:
       - ../shared/load-tests:/scripts:ro
       - ./relatorios:/relatorios
+      # Só leitura: o relatório compara com o último resultado das outras etapas
+      - ..:/curso:ro
     environment:
       BASE_URL: http://ingressa:8000
       ETAPA: "Etapa 01 · Monolito"

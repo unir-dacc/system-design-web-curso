@@ -24,12 +24,26 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { sleep } from 'k6';
 import { Counter, Gauge, Trend } from 'k6/metrics';
+import { SharedArray } from 'k6/data';
 import { gerarHtml } from './relatorio.js';
 
 const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
 const CINEMA = 'http://sistema-cinema:8000';
 const GATEWAY = 'http://gateway-pagamento:8000';
 const ETAPA = __ENV.ETAPA || 'Ingressa';
+
+// Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
+// rodada atual com o último resumo salvo de cada uma das outras etapas.
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-async'];
+const OUTRAS_ETAPAS = new SharedArray('outras etapas', () =>
+  PASTAS_DAS_ETAPAS.flatMap((pasta) => {
+    try {
+      return [JSON.parse(open(`/curso/${pasta}/relatorios/estreia.json`))];
+    } catch (e) {
+      return []; // essa etapa ainda não rodou o teste
+    }
+  }).filter((resumo) => resumo.etapa !== ETAPA),
+);
 
 // O pico
 const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 400);
@@ -180,14 +194,21 @@ export const options = {
 
     // Só para guardar os números
     ...guardar([
+      // O caminho de cada público no pico
+      ...['curioso', 'comprador'].flatMap((tipo) =>
+        [
+          'usuarios_entraram',
+          'usuarios_viram_programacao',
+          'usuarios_viram_mapa',
+          'usuarios_so_olharam',
+          'usuarios_tentaram_comprar',
+          'usuarios_compraram',
+          'usuarios_desistiram',
+          'usuarios_encontraram_esgotado',
+        ].map((m) => `${m}{scenario:pico,tipo:${tipo}}`),
+      ),
       'usuarios_entraram{scenario:pico}',
-      'usuarios_viram_programacao{scenario:pico}',
-      'usuarios_viram_mapa{scenario:pico}',
-      'usuarios_so_olharam{scenario:pico}',
-      'usuarios_tentaram_comprar{scenario:pico}',
-      'usuarios_compraram{scenario:pico}',
       'usuarios_desistiram{scenario:pico}',
-      'usuarios_encontraram_esgotado{scenario:pico}',
       'dropped_iterations{scenario:pico}',
       'http_reqs{scenario:subida}',
       'compras_concluidas{scenario:subida}',
@@ -320,7 +341,9 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
 // --- Personagens ---
 
 export function usuario() {
-  const tags = exec.scenario.name === 'subida' ? { degrau: String(degrauAtual()) } : {};
+  // Cada usuário já chega sabendo o que quer: só olhar (curioso) ou comprar
+  const tipo = Math.random() < FRACAO_QUE_COMPRA ? 'comprador' : 'curioso';
+  const tags = exec.scenario.name === 'subida' ? { degrau: String(degrauAtual()), tipo } : { tipo };
   const inicio = Date.now();
   visitarOSite(tags);
   tempoDoUsuario.add(Date.now() - inicio, tags);
@@ -341,14 +364,14 @@ function visitarOSite(tags) {
   usuariosViramMapa.add(1, tags);
   pensar(OLHANDO_O_MAPA_S);
 
-  // 3. A maioria só olha: compara com outra sessão e vai embora
-  if (Math.random() >= FRACAO_QUE_COMPRA) {
+  // 3. O curioso compara com outra sessão e vai embora
+  if (tags.tipo === 'curioso') {
     if (abrirMapa(outraSessao, tags) === null) return;
     pensar(OLHANDO_O_MAPA_S);
     return usuariosSoOlharam.add(1, tags);
   }
 
-  // 4. Os outros compram
+  // 4. O comprador compra
   if (livres.length === 0) return esgotado.add(1, tags);
 
   const quantidade = 1 + Math.floor(Math.random() * 4);
@@ -477,9 +500,22 @@ function calcularResultado(data) {
   // No pico conta todo mundo: usuários comuns, engajados e robôs (venda é venda)
   const enviadas = n('http_reqs') - n('http_reqs{scenario:subida}');
   const comErro = (v('http_req_failed').passes || 0) - (v('http_req_failed{scenario:subida}').passes || 0);
-  const naoEntraram = n('dropped_iterations{scenario:pico}');
   const travou = Boolean(v('ingressa_nao_respondeu').value);
   const totalVendidos = v('ingressos_vendidos').value || 0;
+  // O caminho de cada público: os curiosos (só olham) e os compradores
+  const publico = (tipo) => {
+    const m = (nome) => n(`${nome}{scenario:pico,tipo:${tipo}}`);
+    return {
+      chegaram: m('usuarios_entraram'),
+      viramProgramacao: m('usuarios_viram_programacao'),
+      viramMapa: m('usuarios_viram_mapa'),
+      soOlharam: m('usuarios_so_olharam'),
+      tentaramComprar: m('usuarios_tentaram_comprar'),
+      compraram: m('usuarios_compraram'),
+      esgotado: m('usuarios_encontraram_esgotado'),
+      desistiram: m('usuarios_desistiram'),
+    };
+  };
 
   return {
     etapa: ETAPA,
@@ -498,18 +534,9 @@ function calcularResultado(data) {
       engajadosPorSegundo: ENGAJADOS_POR_SEGUNDO,
       robos: ROBOS_CAMBISTAS,
       duracaoS: PICO_S,
-      funil: {
-        chegaram: n('usuarios_entraram{scenario:pico}') + naoEntraram,
-        entraram: n('usuarios_entraram{scenario:pico}'),
-        viramProgramacao: n('usuarios_viram_programacao{scenario:pico}'),
-        viramMapa: n('usuarios_viram_mapa{scenario:pico}'),
-        tentaramComprar: n('usuarios_tentaram_comprar{scenario:pico}'),
-        compraram: n('usuarios_compraram{scenario:pico}'),
-      },
-      soOlharam: n('usuarios_so_olharam{scenario:pico}'),
-      desistiram: n('usuarios_desistiram{scenario:pico}'),
-      barrados: n('barrados_na_porta{scenario:pico}'),
-      esgotado: n('usuarios_encontraram_esgotado{scenario:pico}'),
+      naoEntraram: n('dropped_iterations{scenario:pico}'),
+      curiosos: publico('curioso'),
+      compradores: publico('comprador'),
       enviadas,
       respondidas: enviadas - comErro,
       compras: n('compras_concluidas') - n('compras_concluidas{scenario:subida}'),
@@ -548,6 +575,22 @@ function calcularResultado(data) {
   };
 }
 
+// O que uma etapa guarda para ser comparada com as outras
+function resumir(r) {
+  const fracao = (parte, total) => (total ? parte / total : 0);
+  return {
+    etapa: r.etapa,
+    quando: new Date().toISOString(),
+    capacidade: r.subida.capacidade ? r.subida.capacidade.usuariosPorSegundo : 0,
+    curiososAtendidos: fracao(r.pico.curiosos.soOlharam, r.pico.curiosos.chegaram),
+    compradoresAtendidos: fracao(r.pico.compradores.compraram, r.pico.compradores.chegaram),
+    comprasPorSegundoNoPico: r.pico.compras / r.pico.duracaoS,
+    vendidos: r.vendidos,
+    caiuNaSubida: Boolean(r.subida.caiuEm),
+    travou: r.travou,
+  };
+}
+
 // "1 usuário", "2 usuários"
 const usuarios = (n) => `${n} ${n === 1 ? 'usuário' : 'usuários'}`;
 
@@ -556,10 +599,12 @@ function gerarTexto(r) {
   const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : '0%');
   const pctFracao = (x) => (x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);
   const col = (texto, largura) => String(texto).padStart(largura);
+  const linha = (texto, largura) => String(texto).padEnd(largura);
   const icone = (ok) => (ok === null ? '⚠️ ' : ok ? '✅' : '❌');
   const s = r.subida;
   const p = r.pico;
-  const f = p.funil;
+  const cu = p.curiosos;
+  const co = p.compradores;
   const e = r.engajados;
   const porSeg = (total) => (total / p.duracaoS).toFixed(1);
 
@@ -579,6 +624,13 @@ function gerarTexto(r) {
       `${col(pctFracao(d.erros), 9)}${col(pctFracao(d.barrados), 10)}    ${d.viavel ? '✅' : '❌'}`,
   );
 
+  const comparacao = r.comparacao.map(
+    (c) =>
+      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 26)}${col(`${c.capacidade}/s`, 10)}${col(pctFracao(c.curiososAtendidos), 11)}` +
+      `${col(pctFracao(c.compradoresAtendidos), 13)}${col(c.comprasPorSegundoNoPico.toFixed(1), 11)}` +
+      `   ${c.travou ? 'travou' : c.caiuNaSubida ? 'caiu, voltou' : 'ficou de pé'}`,
+  );
+
   return `
 ════════════════════════════════════════════════════════════════════
   ESTREIA DO MAIOR FILME DA HISTÓRIA · ${r.etapa}
@@ -593,28 +645,20 @@ ${degraus.join('\n')}
 
   2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
 
-    Conseguiram comprar .................. ${f.compraram} de ${f.tentaramComprar} que tentaram  (${pct(f.compraram, f.tentaramComprar)})
+    Quem só queria olhar (curiosos) ......... ${pct(cu.soOlharam, cu.chegaram)} conseguiu ver tudo
+      Chegaram ${cu.chegaram} · viram a programação ${cu.viramProgramacao} · viram o mapa ${cu.viramMapa} · viram tudo ${cu.soOlharam} · desistiram ${cu.desistiram}
 
-    O caminho do usuário
-      Chegaram ...................... ${f.chegaram}
-      Conseguiram entrar no site .... ${f.entraram}  (${pct(f.entraram, f.chegaram)})
-      Viram a programação ........... ${f.viramProgramacao}  (${pct(f.viramProgramacao, f.chegaram)})
-      Viram o mapa de assentos ...... ${f.viramMapa}  (${pct(f.viramMapa, f.chegaram)})
-      Só olharam e foram embora ..... ${p.soOlharam}  (${pct(p.soOlharam, f.chegaram)})
-      Tentaram comprar .............. ${f.tentaramComprar}  (${pct(f.tentaramComprar, f.chegaram)})
-      Compraram ..................... ${f.compraram}  (${pct(f.compraram, f.chegaram)})
-      Desistiram (site não carregou)  ${p.desistiram}
-      Barrados na porta (limite) .... ${p.barrados}
+    Quem queria comprar (compradores) ....... ${pct(co.compraram, co.chegaram)} conseguiu comprar
+      Chegaram ${co.chegaram} · viram a programação ${co.viramProgramacao} · viram o mapa ${co.viramMapa} · tentaram comprar ${co.tentaramComprar} · compraram ${co.compraram}
+      Desistiram ${co.desistiram} · encontraram a sessão esgotada ${co.esgotado}
 
-    Os usuários muito engajados (nunca desistem)
-      Compraram ..................... ${e.compraram} de ${e.chegaram}  (${pct(e.compraram, e.chegaram)})
-      Ainda esperando no fim ........ ${e.aindaEsperando}
-      Tempo até comprar ............. metade em até ${seg(e.tempo.mediana)}, o pior ${seg(e.tempo.pior)}
+    Os muito engajados (nunca desistem) ..... ${pct(e.compraram, e.chegaram)} conseguiu comprar
+      Chegaram ${e.chegaram} · compraram ${e.compraram} · ainda esperando no fim ${e.aindaEsperando} · tempo até comprar: metade em até ${seg(e.tempo.mediana)}
 
     O sistema
-      Pico de usuários ao mesmo tempo ${r.picoSimultaneos}
       Requisições por segundo ....... ${porSeg(p.respondidas)} respondidas de ${porSeg(p.enviadas)} enviadas
       Compras por segundo ........... ${porSeg(p.compras)}
+      Pico de usuários ao mesmo tempo ${r.picoSimultaneos}
       Barrados na porta ............. ${p.barradosNaPorta}  (${porSeg(p.barradosNaPorta)} por segundo)
 
     A espera
@@ -626,6 +670,12 @@ ${degraus.join('\n')}
   METAS DO PICO
 ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
 ${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
+  3. COMPARAÇÃO COM AS OUTRAS ETAPAS (último resultado de cada uma)
+
+      etapa                     aguenta   curiosos  compradores  compras/s   no fim
+                                          no pico     no pico     no pico
+${comparacao.join('\n')}
+
   Relatório para projetar: relatorios/estreia.html
 ════════════════════════════════════════════════════════════════════
 `;
@@ -640,9 +690,12 @@ export function handleSummary(data) {
     };
   }
   const resultado = calcularResultado(data);
+  const resumo = resumir(resultado);
+  resultado.comparacao = [...OUTRAS_ETAPAS, { ...resumo, atual: true }].sort((a, b) => a.etapa.localeCompare(b.etapa));
   return {
     stdout: gerarTexto(resultado),
     '/relatorios/estreia.txt': gerarTexto(resultado),
     '/relatorios/estreia.html': gerarHtml(resultado),
+    '/relatorios/estreia.json': JSON.stringify(resumo, null, 2),
   };
 }

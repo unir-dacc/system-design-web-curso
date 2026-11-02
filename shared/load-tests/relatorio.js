@@ -39,25 +39,40 @@ function cartao(titulo, valor, detalhe, barra) {
   return `<div class="cartao"><div class="rotulo">${titulo}</div><div class="valor">${valor}</div>${progresso}<div class="detalhe">${detalhe}</div></div>`;
 }
 
-function funil(f) {
-  const etapas = [
-    ['Chegaram', f.chegaram],
-    ['Conseguiram entrar no site', f.entraram],
-    ['Viram a programação', f.viramProgramacao],
-    ['Viram o mapa de assentos', f.viramMapa],
-    ['Tentaram comprar', f.tentaramComprar],
-    ['Compraram', f.compraram],
-  ];
+function funil(etapas) {
+  const total = etapas[0][1];
   return etapas
-    .map(([nome, total]) => {
-      const p = pct(total, f.chegaram);
+    .map(([nome, valor]) => {
+      const p = pct(valor, total);
       return `<div class="etapa">
         <div class="nome">${nome}</div>
-        <div class="trilho largo"><div class="cheio" style="width:${Math.max(p, total ? 1 : 0)}%"></div></div>
-        <div class="numero">${inteiro(total)} <span>${p}%</span></div>
+        <div class="trilho largo"><div class="cheio" style="width:${Math.max(p, valor ? 1 : 0)}%"></div></div>
+        <div class="numero">${inteiro(valor)} <span>${p}%</span></div>
       </div>`;
     })
     .join('');
+}
+
+function comparacao(lista) {
+  const porcento = (fracao) => `${pct(fracao, 1)}%`;
+  const fim = (c) => (c.travou ? '<span class="ruim">travou</span>' : c.caiuNaSubida ? '<span class="aviso">caiu e voltou</span>' : '<span class="bom">ficou de pé</span>');
+  const quando = (iso) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const linhas = lista.map(
+    (c) => `<div class="linha-etapa ${c.atual ? 'atual' : ''}">
+      <div><b>${c.etapa}</b><span>${c.atual ? 'esta rodada' : `rodou em ${quando(c.quando)}`}</span></div>
+      <div class="forte">${c.capacidade}/s</div>
+      <div>${porcento(c.curiososAtendidos)}</div>
+      <div>${porcento(c.compradoresAtendidos)}</div>
+      <div class="opcional">${decimal(c.comprasPorSegundoNoPico)}/s</div>
+      <div class="opcional">${inteiro(c.vendidos)}</div>
+      <div>${fim(c)}</div>
+    </div>`,
+  );
+  return `<div class="linha-etapa cabecalho">
+      <div>etapa</div><div>aguenta</div><div>curiosos que viram tudo no pico</div><div>compradores que compraram no pico</div>
+      <div class="opcional">compras no pico</div><div class="opcional">ingressos vendidos</div><div>no fim</div>
+    </div>
+    ${linhas.join('')}`;
 }
 
 function espera(nome, e, limiteMs) {
@@ -141,13 +156,26 @@ const ESTILO = `
     .degrau { grid-template-columns: 60px repeat(4, 1fr) 40px; font-size: 14px; }
     .degrau .opcional { display: none; }
   }
-  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-  .dupla > div + div { border-left: 1px solid var(--linha); padding-left: 28px; }
-  .dupla .rotulo { margin-bottom: 6px; }
-  .dupla .grande { font-size: clamp(36px, 6vw, 60px); }
+  .tripla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .tripla > div + div { border-left: 1px solid var(--linha); padding-left: 28px; }
+  .tripla .rotulo { margin-bottom: 6px; }
+  .tripla .grande { font-size: clamp(36px, 5vw, 56px); }
+  .tripla p { font-size: 16px; color: var(--apagado); }
+  .publicos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .publicos h3 { margin: 0 0 4px; font-size: 18px; }
+  .publicos .detalhe { margin-bottom: 10px; }
+  .publicos .etapa { grid-template-columns: 150px 1fr 90px; }
+  .linha-etapa { display: grid; grid-template-columns: 1.6fr repeat(6, 1fr); gap: 10px; align-items: center; padding: 12px 16px; border-radius: 10px; }
+  .linha-etapa + .linha-etapa { margin-top: 6px; }
+  .linha-etapa.cabecalho { color: var(--apagado); font-size: 13px; padding-top: 0; padding-bottom: 4px; }
+  .linha-etapa.atual { background: #fef9e7; outline: 2px solid var(--ouro); }
+  .linha-etapa span { display: block; color: var(--apagado); font-size: 13px; }
+  .linha-etapa .forte { font-weight: 800; font-size: 22px; }
   @media (max-width: 700px) {
-    .dupla { grid-template-columns: 1fr; }
-    .dupla > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: 20px; }
+    .tripla, .publicos { grid-template-columns: 1fr; }
+    .tripla > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: 20px; }
+    .linha-etapa { grid-template-columns: 1.4fr repeat(4, 1fr); font-size: 14px; }
+    .linha-etapa .opcional { display: none; }
   }
 </style>
 `;
@@ -205,7 +233,8 @@ function tabelaDeDegraus(s, metas) {
 export function gerarHtml(r) {
   const s = r.subida;
   const p = r.pico;
-  const f = p.funil;
+  const cu = p.curiosos;
+  const co = p.compradores;
   const e = r.engajados;
   const porSeg = (total) => decimal(total / p.duracaoS);
 
@@ -215,39 +244,63 @@ export function gerarHtml(r) {
 <header><div>
   <div class="selo">Teste de carga · ${r.etapa}</div>
   <h1>Estreia do maior filme da história</h1>
-  <p>Como numa loja de verdade, a maioria só olha: de cada 10 usuários, 3 compram. Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
+  <p>Como numa loja de verdade, a maioria só olha: de cada 10 usuários, 7 são curiosos (olham a programação e o mapa e vão embora) e 3 compram.
+  Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
   ${usuarios(p.usuariosPorSegundo)} por segundo, ${usuarios(p.engajadosPorSegundo)} muito engajados por segundo e ${p.robos} robôs cambistas, durante 1 minuto.</p>
 </div></header>
 <main>
-  <section class="veredito dupla">
+  <section class="veredito tripla">
     <div>
       <div class="rotulo">O máximo que o Ingressa aguenta</div>
       ${vereditoCapacidade(s)}
     </div>
     <div>
-      <div class="rotulo">No pico</div>
-      <div class="grande">${pct(f.compraram, f.tentaramComprar)}%</div>
-      <p>de quem tentou comprar conseguiu: ${inteiro(f.compraram)} de ${inteiro(f.tentaramComprar)}.</p>
+      <div class="rotulo">No pico, os curiosos</div>
+      <div class="grande">${pct(cu.soOlharam, cu.chegaram)}%</div>
+      <p>conseguiram ver tudo o que queriam: ${inteiro(cu.soOlharam)} de ${inteiro(cu.chegaram)}.</p>
+    </div>
+    <div>
+      <div class="rotulo">No pico, os compradores</div>
+      <div class="grande">${pct(co.compraram, co.chegaram)}%</div>
+      <p>conseguiram comprar: ${inteiro(co.compraram)} de ${inteiro(co.chegaram)}.</p>
     </div>
   </section>
   ${alertas(r)}
+
+  <h2>O ganho de cada etapa</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa. Todas com o mesmo hardware: 2 CPUs e 2 GB para o Ingressa.</p>
+  <div class="bloco">${comparacao(r.comparacao)}</div>
 
   <h2>1 · A subida: até quantos usuários o Ingressa aguenta?</h2>
   <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% das páginas (programação e mapa) abrem em até ${tempo(r.metas.paginaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
-  <h2>2 · O pico: o sistema</h2>
-  <div class="cartoes">
-    ${cartao('Ingressos vendidos', inteiro(r.vendidos), `de ${inteiro(r.lugares)} lugares, na rodada inteira`, pct(r.vendidos, r.lugares))}
-    ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'esperando uma resposta no mesmo instante')}
-    ${cartao('Requisições respondidas', `${porSeg(p.respondidas)}/s`, `de ${porSeg(p.enviadas)}/s enviadas`, pct(p.respondidas, p.enviadas))}
-    ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras no pico`)}
-    ${cartao('Barrados na porta', `${porSeg(p.barradosNaPorta)}/s`, `${inteiro(p.barradosNaPorta)} requisições recusadas pelo limite`)}
+  <h2>2 · O pico: cada público conseguiu o que queria?</h2>
+  <div class="publicos">
+    <div class="bloco">
+      <h3>Os curiosos</h3>
+      <div class="detalhe">Olham a programação e o mapa de duas sessões, e vão embora.</div>
+      ${funil([
+        ['Chegaram', cu.chegaram],
+        ['Viram a programação', cu.viramProgramacao],
+        ['Viram o mapa', cu.viramMapa],
+        ['Viram tudo', cu.soOlharam],
+      ])}
+      <div class="detalhe" style="margin-top:10px">Desistiram porque uma página não carregou em 60 s: <b>${inteiro(cu.desistiram)}</b></div>
+    </div>
+    <div class="bloco">
+      <h3>Os compradores</h3>
+      <div class="detalhe">Olham a programação e o mapa, e compram de 1 a 4 ingressos.</div>
+      ${funil([
+        ['Chegaram', co.chegaram],
+        ['Viram a programação', co.viramProgramacao],
+        ['Viram o mapa', co.viramMapa],
+        ['Tentaram comprar', co.tentaramComprar],
+        ['Compraram', co.compraram],
+      ])}
+      <div class="detalhe" style="margin-top:10px">Desistiram porque uma página não carregou em 60 s: <b>${inteiro(co.desistiram)}</b> · Encontraram a sessão esgotada: <b>${inteiro(co.esgotado)}</b></div>
+    </div>
   </div>
-
-  <h2>2 · O pico: o caminho do usuário</h2>
-  <div class="bloco">${funil(f)}</div>
-  <div class="detalhe" style="margin-top:10px">Só olharam e foram embora: <b>${inteiro(p.soOlharam)}</b> · Desistiram porque uma página não carregou em 60 s: <b>${inteiro(p.desistiram)}</b> · Barrados na porta: <b>${inteiro(p.barrados)}</b> · Encontraram a sessão esgotada: <b>${inteiro(p.esgotado)}</b></div>
 
   <h2>2 · O pico: os usuários muito engajados</h2>
   <p class="detalhe" style="margin:-6px 0 14px">Nunca desistem: esperam o quanto for preciso e, se algo der errado, tentam de novo.</p>
@@ -256,6 +309,15 @@ export function gerarHtml(r) {
     ${cartao('Ainda esperando no fim', inteiro(e.aindaEsperando), 'o teste acabou e eles continuavam lá')}
     ${cartao('Tempo até comprar', tempo(e.tempo.mediana), `metade em até isso; o pior: ${tempo(e.tempo.pior)}`)}
     ${cartao('Tentativas', inteiro(e.tentativas), `${e.chegaram ? decimal(e.tentativas / e.chegaram) : '0,0'} por engajado, em média`)}
+  </div>
+
+  <h2>2 · O pico: o sistema</h2>
+  <div class="cartoes">
+    ${cartao('Ingressos vendidos', inteiro(r.vendidos), `de ${inteiro(r.lugares)} lugares, na rodada inteira`, pct(r.vendidos, r.lugares))}
+    ${cartao('Requisições respondidas', `${porSeg(p.respondidas)}/s`, `de ${porSeg(p.enviadas)}/s enviadas`, pct(p.respondidas, p.enviadas))}
+    ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras no pico`)}
+    ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'no site no mesmo instante')}
+    ${cartao('Barrados na porta', `${porSeg(p.barradosNaPorta)}/s`, `${inteiro(p.barradosNaPorta)} requisições recusadas pelo limite`)}
   </div>
 
   <h2>2 · O pico: a espera</h2>

@@ -112,10 +112,11 @@ Leia o relatório com a turma, bloco por bloco:
 
 | Bloco | Perguntas |
 |-------|-----------|
-| Topo | Até quantos usuários por segundo o Ingressa aguenta? E no pico, quantos usuários conseguiram comprar? Apareceu algum alerta? |
+| Topo | Até quantos usuários por segundo o Ingressa aguenta? No pico, os curiosos conseguiram ver o que queriam? E os compradores, conseguiram comprar? Apareceu algum alerta? |
 | A subida | Em qual degrau a linha fica vermelha? O que acontece com as "pessoas no site ao mesmo tempo" depois desse ponto? |
+| O ganho de cada etapa | Por enquanto só tem uma linha. O que esperamos ver nela nas próximas aulas? |
 | O pico: o sistema | Compare as requisições enviadas com as respondidas. Quantos usuários esperavam ao mesmo tempo? |
-| O pico: o caminho do usuário | Em qual etapa o público se perdeu? |
+| O pico: cada público | Em qual página cada público se perdeu? Quem sofreu mais: quem só queria olhar ou quem queria comprar? |
 | O pico: os engajados | Quem nunca desiste conseguiu comprar? |
 | A espera e as metas | Quanto tempo o usuário esperou? Quais metas passaram? |
 
