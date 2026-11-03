@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="230" viewBox="0 0 1000 230" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="1000" height="230" rx="24" fill="#faf5ff"/>
+<text x="40" y="50" fill="#1e1b4b" font-size="24" font-weight="800">De cada 100 pessoas no pico</text>
+<clipPath id="barra"><rect x="40" y="76" width="920" height="56" rx="14"/></clipPath><g clip-path="url(#barra)">
+<rect x="40.0" y="76" width="644.0" height="56" fill="#6d28d9"/>
+<text x="362.0" y="111" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800">70</text>
+<rect x="684.0" y="76" width="92.0" height="56" fill="#8b5cf6"/>
+<text x="730.0" y="111" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800">10</text>
+<rect x="776.0" y="76" width="92.0" height="56" fill="#a78bfa"/>
+<text x="822.0" y="111" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800">10</text>
+<rect x="868.0" y="76" width="64.4" height="56" fill="#ec4899"/>
+<rect x="932.4" y="76" width="18.4" height="56" fill="#f472b6"/>
+<rect x="950.8" y="76" width="9.2" height="56" fill="#f9a8d4"/>
+</g>
+<circle cx="48" cy="172" r="8" fill="#6d28d9"/>
+<text x="64" y="178" fill="#1e1b4b" font-size="17" font-weight="600">70 abrem o feed</text>
+<circle cx="240.0" cy="172" r="8" fill="#8b5cf6"/>
+<text x="256.0" y="178" fill="#1e1b4b" font-size="17" font-weight="600">10 perfil</text>
+<circle cx="374.4" cy="172" r="8" fill="#a78bfa"/>
+<text x="390.4" y="178" fill="#1e1b4b" font-size="17" font-weight="600">10 post</text>
+<circle cx="489.59999999999997" cy="172" r="8" fill="#ec4899"/>
+<text x="505.59999999999997" y="178" fill="#1e1b4b" font-size="17" font-weight="600">7 curtem</text>
+<circle cx="614.4" cy="172" r="8" fill="#f472b6"/>
+<text x="630.4" y="178" fill="#1e1b4b" font-size="17" font-weight="600">2 publicam</text>
+<circle cx="758.4" cy="172" r="8" fill="#f9a8d4"/>
+<text x="774.4" y="178" fill="#1e1b4b" font-size="17" font-weight="600">1 comentam</text>
+<text x="40" y="210" fill="#9d174d" font-size="15">a maior parte das visitas a posts, das curtidas e dos comentários vai para o post viral</text>
+</svg>
