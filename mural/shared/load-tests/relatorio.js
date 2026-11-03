@@ -15,9 +15,9 @@ function alertas(r) {
     lista.push(`O Mural <b>caiu ainda na subida</b>, com ${r.subida.caiuEm.porSegundo} requisições por segundo, antes de o pico começar.`);
   }
   if (r.travou) lista.push('O Mural <b>travou</b> e não voltou. Para destravar: <code>docker compose restart app</code>');
-  if (r.curtidas.contadas !== undefined && r.curtidas.aceitas && r.curtidas.contadas < r.curtidas.aceitas) {
+  if (r.curtidas.contadas !== undefined && r.curtidas.registradas && r.curtidas.contadas < r.curtidas.registradas) {
     lista.push(
-      `<b>${inteiro(r.curtidas.aceitas)} curtidas</b> no post viral foram aceitas, mas o Mural mostra só <b>${inteiro(r.curtidas.contadas)}</b>.`,
+      `<b>${inteiro(r.curtidas.registradas)} curtidas</b> do post viral estão gravadas no banco, mas o Mural mostra só <b>${inteiro(r.curtidas.contadas)}</b>.`,
     );
   }
   return lista.map((texto) => `<div class="alerta">⚠️ ${texto}</div>`).join('');
@@ -253,7 +253,7 @@ export function gerarHtml(r) {
   const capacidade = s.capacidade
     ? `<div class="grande">${inteiro(s.capacidade.porSegundo)}/s</div><p>requisições por segundo. ${s.quebrou ? `Com ${inteiro(s.quebrou.porSegundo)}/s, fica inviável.` : 'Aguentou todos os degraus.'}</p>`
     : `<div class="grande">Inviável</div><p>Não aguentou nem ${s.degraus[0].porSegundo} requisições por segundo.</p>`;
-  const contados = r.curtidas.contadas === undefined ? '—' : porcento(r.curtidas.aceitas ? r.curtidas.contadas / r.curtidas.aceitas : 1);
+  const contados = r.curtidas.contadas === undefined ? '—' : porcento(r.curtidas.registradas ? r.curtidas.contadas / r.curtidas.registradas : 1);
 
   return pagina(
     `Mural · ${r.etapa}`,
@@ -280,7 +280,7 @@ export function gerarHtml(r) {
     <div>
       <div class="rotulo">Curtidas do post viral mostradas pelo Mural</div>
       <div class="grande">${contados}</div>
-      <p>${inteiro(r.curtidas.contadas)} mostradas de ${inteiro(r.curtidas.aceitas)} aceitas.</p>
+      <p>${inteiro(r.curtidas.contadas)} mostradas de ${inteiro(r.curtidas.registradas)} gravadas no banco.</p>
     </div>
   </section>
   ${alertas(r)}

@@ -99,7 +99,7 @@ const RESULTADOS = ['ok', 'erro', 'barrada'];
 
 const tempo = new Trend('tempo', true); // só de quem foi atendido
 const requisicoes = new Counter('requisicoes');
-const curtidasNoViral = new Counter('curtidas_no_viral'); // curtidas novas aceitas (201)
+const curtidasRegistradas = new Gauge('curtidas_registradas'); // as curtidas gravadas no banco, no fim
 const curtidasContadas = new Gauge('curtidas_contadas'); // o total que o Mural mostra no fim
 const naoRespondeu = new Gauge('nao_respondeu');
 
@@ -163,7 +163,7 @@ export const options = {
       DEGRAUS.flatMap((d) => [`tempo{degrau:${d},endpoint:feed}`, `tempo{degrau:${d},tipo:escrita}`]),
       'max>=0',
     ),
-    ...guardar(['dropped_iterations{scenario:pico}', 'dropped_iterations{scenario:subida}', 'curtidas_no_viral']),
+    ...guardar(['dropped_iterations{scenario:pico}', 'dropped_iterations{scenario:subida}']),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
   setupTimeout: '120s',
@@ -266,10 +266,8 @@ export function acesso(rede) {
   }
   if (acao === 'curtir') {
     const post = postAlvo(rede, 'curtir');
-    const r = enviar('POST', `/posts/${post}/curtidas`, { usuario_id: eu }, 'curtir');
     // 201: curtida nova. 200: essa pessoa já tinha curtido
-    if (medir('curtir', r, [200, 201]) && r.status === 201 && post === rede.viral) curtidasNoViral.add(1);
-    return;
+    return medir('curtir', enviar('POST', `/posts/${post}/curtidas`, { usuario_id: eu }, 'curtir'), [200, 201]);
   }
   if (acao === 'publicar') {
     return medir('publicar', enviar('POST', '/posts', { usuario_id: eu, texto: texto() }, 'publicar'), [201]);
@@ -306,7 +304,11 @@ export function teardown(rede) {
     naoRespondeu.add(1);
     return;
   }
-  // Quantas curtidas o post viral mostra?
+  // Quantas curtidas o post viral tem de verdade (as linhas gravadas no banco),
+  // e quantas o Mural mostra? Uma curtida pode ser gravada mesmo depois que
+  // quem curtiu desistiu de esperar: por isso o teste pergunta ao banco.
+  const registradas = http.get(`${BASE}/admin/curtidas/${rede.viral}`, { timeout: '60s' });
+  if (registradas.status === 200) curtidasRegistradas.add(registradas.json('curtidas'));
   const r = http.get(`${BASE}/posts/${rede.viral}`, { timeout: '60s' });
   if (r.status === 200) curtidasContadas.add(r.json('curtidas'));
 }
@@ -393,8 +395,8 @@ function calcularResultado(data) {
       naoEnviadas,
       feed: feed ? { mediana: feed.mediana, p95: feed.p95, pior: feed.pior } : {},
     },
-    // As curtidas do post viral: quantas foram aceitas, e quantas o Mural mostra
-    curtidas: { aceitas: n('curtidas_no_viral'), contadas: v('curtidas_contadas').value },
+    // As curtidas do post viral: quantas estão gravadas no banco, e quantas o Mural mostra
+    curtidas: { registradas: v('curtidas_registradas').value, contadas: v('curtidas_contadas').value },
     progressao,
     endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: doPico },
     metas: {
@@ -425,7 +427,7 @@ function resumir(r) {
     capacidade: r.subida.capacidade ? r.subida.capacidade.porSegundo : 0,
     atendidasNoPico: r.pico.enviadas ? r.pico.atendidas / r.pico.enviadas : 0,
     p95FeedNoPico: r.pico.feed.p95 === undefined ? null : r.pico.feed.p95,
-    curtidasContadas: r.curtidas.aceitas ? (r.curtidas.contadas || 0) / r.curtidas.aceitas : null,
+    curtidasContadas: r.curtidas.registradas ? (r.curtidas.contadas || 0) / r.curtidas.registradas : null,
     caiuNaSubida: Boolean(r.subida.caiuEm),
     travou: r.travou,
   };
@@ -490,7 +492,7 @@ ${tabelaDeEndpoints(r.endpoints.subida)}
     Velocidade por endpoint
 ${tabelaDeEndpoints(r.endpoints.pico)}
 
-  AS CURTIDAS DO POST VIRAL: ${r.curtidas.aceitas} aceitas, ${r.curtidas.contadas === undefined ? '—' : r.curtidas.contadas} mostradas pelo Mural
+  AS CURTIDAS DO POST VIRAL: ${r.curtidas.registradas === undefined ? '—' : r.curtidas.registradas} gravadas no banco, ${r.curtidas.contadas === undefined ? '—' : r.curtidas.contadas} mostradas pelo Mural
 
   METAS DO PICO
 ${r.metas.lista.map((m) => `    ${icone(m.ok)} ${m.texto}${m.detalhe ? ` (${m.detalhe})` : ''}`).join('\n')}

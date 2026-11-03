@@ -136,7 +136,7 @@ No fim, o relatório (`relatorios/viral.html`) mostra:
 - 📈 **a capacidade:** até quantas requisições por segundo o Mural aguenta;
 - 🪜 **a progressão:** degrau a degrau, quantas chegaram e quantas foram atendidas;
 - ⏱️ **a velocidade de cada endpoint**, na subida e no pico;
-- ❤️ **a conferência das curtidas do post viral:** quantas foram aceitas e quantas o Mural mostra;
+- ❤️ **a conferência das curtidas do post viral:** quantas estão gravadas no banco e quantas o Mural mostra;
 - 🏁 **a comparação com as etapas anteriores**, lado a lado.
 
 ## 📏 As regras do jogo

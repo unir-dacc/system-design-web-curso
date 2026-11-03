@@ -102,7 +102,7 @@ xdg-open relatorios/viral.html
 | Topo | Quantas requisições por segundo o Mural aguenta? E no pico, quantas foram atendidas? |
 | A progressão | Em qual degrau as atendidas param de acompanhar as que chegam? |
 | A velocidade de cada endpoint | Qual endpoint é o mais lento? Qual é o mais rápido? Por quê? |
-| As curtidas | As curtidas aceitas no post viral e as que o Mural mostra batem? |
+| As curtidas | As curtidas gravadas no banco para o post viral e as que o Mural mostra batem? |
 
 👉 **Observe também:** no `docker compose stats`, a CPU das réplicas do app e a do Postgres. Quem chega no limite? Quanto as réplicas estão usando da CPU que têm?
 

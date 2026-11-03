@@ -36,3 +36,13 @@ async def amostra(quantidade: int = 1000, db: AsyncSession = Depends(get_db)):
         "total_de_usuarios": USUARIOS_INICIAIS,
         "celebridade": celebridade,
     }
+
+
+@router.get("/curtidas/{post_id}")
+async def curtidas_registradas(post_id: int, db: AsyncSession = Depends(get_db)):
+    """Quantas curtidas o post tem de verdade: as linhas gravadas na tabela.
+
+    O teste de carga compara com o total que o Mural mostra no post.
+    """
+    total = await db.scalar(text("SELECT count(*) FROM curtidas WHERE post_id = :post_id"), {"post_id": post_id})
+    return {"post_id": post_id, "curtidas": total}
