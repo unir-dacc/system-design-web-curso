@@ -26,6 +26,7 @@ docker compose down -v                                       # derruba e apaga o
 | Etapa | Tema |
 |-------|------|
 | `01-monolito` | O ponto de partida: FastAPI síncrono, SQLAlchemy ORM do jeito mais direto, e Postgres |
+| `02-indices` | O banco no limite: os índices que as consultas do Mural precisam (e por que a ForeignKey não cria um) |
 
 ## O Mural
 

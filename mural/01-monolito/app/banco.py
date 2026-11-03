@@ -34,6 +34,9 @@ LOREM = (
 )
 
 CARGA = [
+    # Durante a carga, o banco não confere as ForeignKeys linha a linha (são
+    # milhões de conferências): os dados gerados aqui já são válidos
+    "SET LOCAL session_replication_role = replica",
     f"""
     INSERT INTO usuarios (id, nome, criado_em)
     SELECT g,
@@ -43,15 +46,17 @@ CARGA = [
     """,
     # Quantos cada um segue: de 1 a 300, a maioria poucos. Quem é seguido:
     # random()^4 empurra o sorteio para os primeiros ids, as celebridades.
+    # Os pares repetidos do sorteio ficam de fora (DISTINCT), e a inserção vai
+    # na ordem da chave primária, bem mais rápida do que em ordem aleatória.
     """
     INSERT INTO seguidores (seguidor_id, seguido_id)
-    SELECT seguidor, seguido FROM (
+    SELECT DISTINCT seguidor, seguido FROM (
         SELECT u AS seguidor, 1 + floor(:usuarios * power(random(), 4))::bigint AS seguido
         FROM generate_series(1, :usuarios) u
         CROSS JOIN LATERAL generate_series(1, floor(exp(random() * ln(300)))::int + 0 * u)
     ) sorteio
     WHERE seguidor <> seguido
-    ON CONFLICT DO NOTHING
+    ORDER BY 1, 2
     """,
     """
     INSERT INTO posts (id, autor_id, texto, criado_em)
@@ -61,13 +66,17 @@ CARGA = [
            :agora - random() * interval '365 days'
     FROM generate_series(1, :posts) g
     """,
+    # Do mesmo jeito: sem os pares repetidos, na ordem da chave primária
     """
     INSERT INTO curtidas (post_id, usuario_id, criado_em)
-    SELECT 1 + floor(:posts * power(random(), 3))::bigint,
-           1 + floor(:usuarios * random())::bigint,
-           :agora - random() * interval '365 days'
-    FROM generate_series(1, :curtidas)
-    ON CONFLICT DO NOTHING
+    SELECT post_id, usuario_id, min(criado_em) FROM (
+        SELECT 1 + floor(:posts * power(random(), 3))::bigint AS post_id,
+               1 + floor(:usuarios * random())::bigint AS usuario_id,
+               :agora - random() * interval '365 days' AS criado_em
+        FROM generate_series(1, :curtidas)
+    ) sorteio
+    GROUP BY 1, 2
+    ORDER BY 1, 2
     """,
     """
     INSERT INTO comentarios (id, post_id, autor_id, texto, criado_em)
@@ -82,6 +91,7 @@ CARGA = [
     "SELECT setval(pg_get_serial_sequence('posts', 'id'), :posts)",
     "SELECT setval(pg_get_serial_sequence('comentarios', 'id'), :comentarios)",
     "INSERT INTO aula (preparada_em) VALUES (:agora)",
+    "SET LOCAL session_replication_role = DEFAULT",
     # Atualiza as estatísticas que o Postgres usa para planejar as consultas
     "ANALYZE",
 ]
