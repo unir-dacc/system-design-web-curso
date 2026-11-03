@@ -37,7 +37,7 @@ const HARDWARE = __ENV.HARDWARE || 'Postgres 1 CPU / 1 GB';
 // Cada rodada salva um resumo em relatorios/viral.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-ponto-de-partida'];
+const PASTAS_DAS_ETAPAS = ['01-ponto-de-partida', '02-indices'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {

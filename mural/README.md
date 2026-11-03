@@ -72,6 +72,7 @@ para a aula (`DEMO.md`): o que rodar, onde olhar e as perguntas para a turma.
 | Etapa | Tema |
 |:-----:|------|
 | [`01-ponto-de-partida`](01-ponto-de-partida/) | **O ponto de partida.** Um backend robusto (nginx e 4 réplicas async) na frente de um banco usado do jeito mais direto com o ORM. Quanto ele aguenta? |
+| [`02-indices`](02-indices/) | **O banco lendo tudo.** Os índices que as consultas do Mural precisam, e por que a ForeignKey não cria um |
 
 > 🚧 **Em construção.** As próximas aulas vão atacar, uma de cada vez, os problemas que
 > aparecem no banco quando o Mural cresce.
