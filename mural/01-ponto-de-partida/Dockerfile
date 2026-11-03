@@ -9,5 +9,5 @@ EXPOSE 8000
 # start-period, as falhas do teste de saúde não contam
 HEALTHCHECK --start-period=600s --interval=2s --timeout=2s --retries=30 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
-# Um único processo.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# 4 processos por réplica (o lado do app não tem limite de CPU)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

@@ -107,7 +107,7 @@ function comparacao(lista) {
   const quando = (iso) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const linhas = lista.map(
     (c) => `<div class="linha-etapa ${c.atual ? 'atual' : ''}">
-      <div><b>${c.etapa}</b><span>${c.hardware || '2 CPUs / 2 GB'}</span><span>${c.atual ? 'esta rodada' : `rodou em ${quando(c.quando)}`}</span></div>
+      <div><b>${c.etapa}</b><span>${c.hardware || 'Postgres 1 CPU / 1 GB'}</span><span>${c.atual ? 'esta rodada' : `rodou em ${quando(c.quando)}`}</span></div>
       <div class="forte">${inteiro(c.capacidade)}/s</div>
       <div>${porcento(c.atendidasNoPico)}</div>
       <div>${tempo(c.p95FeedNoPico === null ? undefined : c.p95FeedNoPico)}</div>
@@ -290,7 +290,7 @@ export function gerarHtml(r) {
   <div class="bloco">${graficoDaProgressao(r.progressao)}</div>
 
   <h2>O ganho de cada etapa</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa anterior. Todas com 2 CPUs e 2 GB para o Mural.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">Esta rodada ao lado do último resultado de cada etapa anterior. Em todas, o Postgres tem 1 CPU e 1 GB.</p>
   <div class="bloco">${comparacao(r.comparacao)}</div>
 
   <h2>1 · A subida: quantas requisições por segundo o Mural aguenta?</h2>

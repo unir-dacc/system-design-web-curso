@@ -1,20 +1,25 @@
-# Mural · Aula 01: O monolito
+# Mural · Aula 01: O ponto de partida
 
-> **Objetivo:** apresentar o Mural funcionando, escrito do jeito mais direto
-> com o ORM, e colocá-lo à prova no dia em que um post viraliza.
+> **Objetivo:** apresentar o Mural funcionando. O lado do app é robusto e tem
+> CPU de sobra; o banco foi escrito do jeito mais direto com o ORM e tem um
+> orçamento pequeno e fixo. Colocá-lo à prova no dia em que um post viraliza.
 
 ```
-            ┌──────────────────────────┐        ┌───────────────────────────┐
- usuário ──▶│  Mural (1 processo)      │──────▶ │ Postgres                  │
-            │  FastAPI síncrono + ORM  │        │ 100 mil usuários          │
-            │  1 CPU / 1 GB            │        │ 1 milhão de posts         │
-            └──────────────────────────┘        │ 1 CPU / 1 GB              │
-                                                └───────────────────────────┘
+                         ┌─────────────────────────────┐
+                    ┌───▶│ Mural · réplica 1 (4 proc.) │───┐
+            ┌─────┐ │    ├─────────────────────────────┤   │    ┌───────────────────────┐
+ usuário ──▶│nginx│─┼───▶│ Mural · réplica 2 (4 proc.) │───┼──▶ │ Postgres              │
+            └─────┘ │    ├─────────────────────────────┤   │    │ 100 mil usuários      │
+                    ├───▶│ Mural · réplica 3 (4 proc.) │───┤    │ 1 milhão de posts     │
+                    │    ├─────────────────────────────┤   │    │ 1 CPU / 1 GB          │
+                    └───▶│ Mural · réplica 4 (4 proc.) │───┘    └───────────────────────┘
+                         └─────────────────────────────┘
+                          FastAPI async + ORM, CPU sem limite
 ```
 
 ## 0. Preparação (antes da aula)
 
-Todos os comandos são rodados **dentro desta pasta** (`mural/01-monolito/`).
+Todos os comandos são rodados **dentro desta pasta** (`mural/01-ponto-de-partida/`).
 
 ```bash
 docker compose down -v          # garante que começa do zero
@@ -23,6 +28,7 @@ docker compose up -d --build --wait
 
 A primeira subida cria a rede inteira (usuários, seguidores, posts, curtidas e comentários).
 Deixe abertas duas abas: http://localhost:8000/docs e um terminal com `docker compose stats`.
+Rode o teste uma vez antes da aula: logo depois da subida, o banco ainda não tem nada na memória.
 
 ---
 
@@ -30,6 +36,10 @@ Deixe abertas duas abas: http://localhost:8000/docs e um terminal com `docker co
 
 | Arquivo | O que mostrar |
 |---------|---------------|
+| `docker-compose.yml` | O nginx, as 4 réplicas do app sem limite de CPU, e o Postgres com 1 CPU / 1 GB. Por que só o banco tem limite? |
+| `nginx/nginx.conf` | Como o nginx distribui as requisições entre as réplicas |
+| `app/db.py` | O pool de conexões de cada processo, e os dois limites de tempo. Quantas conexões chegam ao banco no total? |
+| `app/main.py` | Quando o banco não dá conta a tempo, o Mural responde 503 na hora |
 | `app/modelos.py` | As cinco tabelas e as relações entre elas. Quais colunas têm índice? |
 | `app/banco.py` | Como a rede inicial é gerada: por que ela é desigual de propósito? |
 | `app/routes/feed.py` | O feed: os posts de quem eu sigo, dos mais novos para os mais antigos, de 20 em 20 |
@@ -94,7 +104,9 @@ xdg-open relatorios/viral.html
 | A velocidade de cada endpoint | Qual endpoint é o mais lento? Qual é o mais rápido? Por quê? |
 | As curtidas | As curtidas aceitas no post viral e as que o Mural mostra batem? |
 
-👉 **Observe também:** no `docker compose stats`, a CPU do app e do Postgres. Quem chega no limite primeiro? E a memória do app, depois que ele deixa de responder?
+👉 **Observe também:** no `docker compose stats`, a CPU das réplicas do app e a do Postgres. Quem chega no limite? Quanto as réplicas estão usando da CPU que têm?
+
+Pergunta: *"depois que o pico passa, o Mural volta a responder? O que impede que ele fique travado?"*
 
 Anote o número do topo: ele vai ser comparado com o das próximas etapas.
 
@@ -104,6 +116,6 @@ Anote o número do topo: ele vai ser comparado com o das próximas etapas.
 
 Deixe no quadro as perguntas que a turma levantou:
 
-- Onde o Mural passou o tempo?
+- Onde o Mural passou o tempo? Adiantaria colocar mais réplicas do app?
 - Quantas consultas custa uma página do feed? E a página 50?
 - O que acontece com o feed quando a tabela de posts dobrar de tamanho?

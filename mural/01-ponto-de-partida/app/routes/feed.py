@@ -1,15 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import POSTS_POR_PAGINA
 from app.db import get_db
 from app.modelos import Post, Seguidor, Usuario
 from app.routes.esquemas import PostOut, post_out
 
-# As rotas são "def" (síncronas): o FastAPI roda cada uma numa thread de um
-# pool com 40 threads. Com 40 requisições lentas ao mesmo tempo, a 41ª espera.
+# As rotas são "async": enquanto uma espera o banco, o processo atende as outras
 router = APIRouter(tags=["feed"])
 
 
@@ -20,34 +19,34 @@ class PerfilOut(BaseModel):
 
 
 @router.get("/feed", response_model=list[PostOut])
-def feed(usuario_id: int, pagina: int = Query(1, ge=1), db: Session = Depends(get_db)):
+async def feed(usuario_id: int, pagina: int = Query(1, ge=1), db: AsyncSession = Depends(get_db)):
     """Os posts de quem o usuário segue, dos mais novos para os mais antigos."""
     quem_eu_sigo = select(Seguidor.seguido_id).where(Seguidor.seguidor_id == usuario_id)
     # ⚠️ PROPOSITAL: sem índice em posts.autor_id, o banco lê todos os posts
     # para achar os de quem eu sigo, e ordena tudo para pegar os 20 mais novos.
     # E a paginação pula as páginas anteriores com OFFSET: a página 50 lê e
     # descarta os 980 posts que vêm antes.
-    posts = db.scalars(
+    posts = (await db.scalars(
         select(Post)
         .where(Post.autor_id.in_(quem_eu_sigo))
         .order_by(Post.criado_em.desc())
         .offset((pagina - 1) * POSTS_POR_PAGINA)
         .limit(POSTS_POR_PAGINA)
-    ).all()
-    return [post_out(db, post) for post in posts]
+    )).all()
+    return [await post_out(db, post) for post in posts]
 
 
 @router.get("/usuarios/{usuario_id}", response_model=PerfilOut)
-def perfil(usuario_id: int, pagina: int = Query(1, ge=1), db: Session = Depends(get_db)):
+async def perfil(usuario_id: int, pagina: int = Query(1, ge=1), db: AsyncSession = Depends(get_db)):
     """O perfil: o usuário e os posts dele, dos mais novos para os mais antigos."""
-    usuario = db.get(Usuario, usuario_id)
+    usuario = await db.get(Usuario, usuario_id)
     if usuario is None:
         raise HTTPException(404, "Usuário não encontrado")
-    posts = db.scalars(
+    posts = (await db.scalars(
         select(Post)
         .where(Post.autor_id == usuario_id)
         .order_by(Post.criado_em.desc())
         .offset((pagina - 1) * POSTS_POR_PAGINA)
         .limit(POSTS_POR_PAGINA)
-    ).all()
-    return PerfilOut(id=usuario.id, nome=usuario.nome, posts=[post_out(db, post) for post in posts])
+    )).all()
+    return PerfilOut(id=usuario.id, nome=usuario.nome, posts=[await post_out(db, post) for post in posts])

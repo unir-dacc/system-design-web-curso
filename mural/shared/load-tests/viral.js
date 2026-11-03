@@ -31,13 +31,13 @@ import { gerarHtml } from './relatorio.js';
 
 const BASE = __ENV.BASE_URL || 'http://app:8000';
 const ETAPA = __ENV.ETAPA || 'Mural';
-// O hardware do Mural nesta etapa (aparece na comparação entre etapas)
-const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
+// O que é limitado nesta etapa: o banco (aparece na comparação entre etapas)
+const HARDWARE = __ENV.HARDWARE || 'Postgres 1 CPU / 1 GB';
 
 // Cada rodada salva um resumo em relatorios/viral.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito'];
+const PASTAS_DAS_ETAPAS = ['01-ponto-de-partida'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -461,7 +461,7 @@ function gerarTexto(r) {
     ].join('\n');
   const comparacao = r.comparacao.map(
     (c) =>
-      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 28)}${linha(c.hardware || '2 CPUs / 2 GB', 15)}${col(`${c.capacidade}/s`, 9)}` +
+      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 28)}${linha(c.hardware || 'Postgres 1 CPU / 1 GB', 24)}${col(`${c.capacidade}/s`, 9)}` +
       `${col(pct(c.atendidasNoPico), 12)}${col(seg(c.p95FeedNoPico === null ? undefined : c.p95FeedNoPico), 11)}` +
       `${col(pct(c.curtidasContadas), 12)}   ${c.travou ? 'travou' : c.caiuNaSubida ? 'caiu, voltou' : 'ficou de pé'}`,
   );
@@ -497,8 +497,8 @@ ${r.metas.lista.map((m) => `    ${icone(m.ok)} ${m.texto}${m.detalhe ? ` (${m.de
 ${s.caiuEm ? `\n  ⚠️  O Mural CAIU ainda na subida (com ${s.caiuEm.porSegundo}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Mural TRAVOU e não voltou. Para destravar: docker compose restart app\n' : ''}
   3. COMPARAÇÃO COM AS ETAPAS ANTERIORES (último resultado de cada uma)
 
-      etapa                       hardware        aguenta   atendidas   95% feed    curtidas     no fim
-                                                             no pico    no pico    mostradas
+      etapa                       banco                    aguenta   atendidas   95% feed    curtidas     no fim
+                                                                      no pico    no pico    mostradas
 ${comparacao.join('\n')}
 
   Relatório para projetar: relatorios/viral.html

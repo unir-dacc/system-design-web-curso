@@ -9,7 +9,7 @@ autor ou os comentários de um post é ler a tabela inteira.
 from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
@@ -41,9 +41,6 @@ class Post(Base):
     texto: Mapped[str] = mapped_column(Text)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Carregado só quando alguém usa post.autor: uma consulta a mais, na hora
-    autor: Mapped[Usuario] = relationship()
-
 
 class Curtida(Base):
     """Cada um curte um post uma vez só: a chave primária é o par (post, usuário)."""
@@ -64,4 +61,3 @@ class Comentario(Base):
     texto: Mapped[str] = mapped_column(Text)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    autor: Mapped[Usuario] = relationship()

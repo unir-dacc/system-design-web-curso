@@ -44,7 +44,7 @@ mede, com números, o que muda.
 Você só precisa do **Docker**. A partir da raiz do repositório:
 
 ```bash
-cd mural/01-monolito
+cd mural/01-ponto-de-partida
 
 docker compose up -d --build --wait                                # sobe o Mural (a 1ª vez cria a rede inteira)
 docker compose run --rm --service-ports k6 run /scripts/viral.js   # o dia em que um post viralizou
@@ -71,7 +71,7 @@ para a aula (`DEMO.md`): o que rodar, onde olhar e as perguntas para a turma.
 
 | Etapa | Tema |
 |:-----:|------|
-| [`01-monolito`](01-monolito/) | **O ponto de partida.** FastAPI síncrono, SQLAlchemy ORM do jeito mais direto, e Postgres. Quanto ele aguenta? |
+| [`01-ponto-de-partida`](01-ponto-de-partida/) | **O ponto de partida.** Um backend robusto (nginx e 4 réplicas async) na frente de um banco usado do jeito mais direto com o ORM. Quanto ele aguenta? |
 
 > 🚧 **Em construção.** As próximas aulas vão atacar, uma de cada vez, os problemas que
 > aparecem no banco quando o Mural cresce.
@@ -79,8 +79,14 @@ para a aula (`DEMO.md`): o que rodar, onde olhar e as perguntas para a turma.
 ## 🧩 O que tem dentro
 
 <p align="center">
-  <img src="imagens/arquitetura.svg" alt="O público (k6) fala HTTP com o Mural (FastAPI + SQLAlchemy), que fala SQL com o PostgreSQL, tudo dentro de um orçamento fixo de 2 CPUs e 2 GB" width="90%">
+  <img src="imagens/arquitetura.svg" alt="O público (k6) chega ao nginx, que distribui entre 4 réplicas do Mural com CPU sem limite; todas falam com um único PostgreSQL limitado a 1 CPU e 1 GB" width="90%">
 </p>
+
+O lado do app é robusto desde a primeira aula: o **nginx** distribui as requisições entre
+**4 réplicas** do Mural (FastAPI async, 4 processos cada), com CPU de sobra. Quando o banco
+não dá conta a tempo, o Mural responde na hora com 503, em vez de ficar pendurado. Do outro
+lado, um único **PostgreSQL com 1 CPU e 1 GB**: é ele que chega no limite, e é nele que cada
+aula mexe.
 
 | Rota | O que faz |
 |------|-----------|
@@ -135,9 +141,10 @@ No fim, o relatório (`relatorios/viral.html`) mostra:
 
 ## 📏 As regras do jogo
 
-- **O orçamento é fixo:** o Mural tem sempre **2 CPUs e 2 GB de RAM**, somando tudo o que é dele.
-  Uma peça nova divide esse orçamento com as outras. O gerador de carga (k6) fica de fora.
-- **Os ganhos vêm da arquitetura**, nunca de máquina maior.
+- **O app tem CPU de sobra; o banco, não:** o Postgres tem sempre **1 CPU e 1 GB de RAM**.
+  Uma peça nova do lado do banco (um pool de conexões, uma réplica, um cache) divide esse
+  mesmo orçamento.
+- **Os ganhos vêm do que se faz no banco**, nunca de banco maior.
 - **Toda aula se mede com o mesmo teste**, e o relatório compara com as etapas anteriores.
 
 <p align="center">
