@@ -9,8 +9,9 @@
 //      descobrimos quantas requisições por segundo ele aguenta.
 //
 //   2. O PICO: por 1 minuto chega todo mundo de uma vez. De cada 100 requisições:
-//      - 70 abrem o feed. A maioria fica na primeira página, alguns rolam
-//        um pouco, e poucos vão bem fundo;
+//      - 70 abrem o feed. A maioria das pessoas fica na primeira página,
+//        algumas rolam um pouco, e poucas vão bem fundo. Quem rola pede uma
+//        página depois da outra;
 //      - 10 abrem um perfil (às vezes o da celebridade);
 //      - 10 abrem um post com os comentários;
 //      - 7 curtem, 2 publicam e 1 comenta.
@@ -36,7 +37,7 @@ const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 // Cada rodada salva um resumo em relatorios/viral.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-indices', '03-n-mais-1'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-indices', '03-n-mais-1', '04-paginacao', '05-custo-do-orm'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -51,8 +52,8 @@ const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
 const PICO = Number(__ENV.PICO || 1000);
 const PICO_S = 60;
 
-// A subida: cada degrau tem ~1,5× o anterior, sempre abaixo do pico
-const DEGRAUS = (__ENV.DEGRAUS || '2,5,10,20,30,50,75,100,150,200,300,500,750')
+// A subida: cada degrau tem ~1,25× a 1,5× o anterior, sempre abaixo do pico
+const DEGRAUS = (__ENV.DEGRAUS || '2,5,10,20,30,40,50,60,75,100,125,150,200,250,300,500,750')
   .split(',')
   .map(Number)
   .filter((d) => d < PICO);
@@ -193,13 +194,37 @@ function medir(endpoint, r, esperados) {
 const sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];
 const entre = (de, ate) => de + Math.floor(Math.random() * (ate - de + 1));
 
-// Até onde cada um rola o feed: a maioria fica na primeira página, alguns
-// rolam um pouco, e poucos vão bem fundo
-function paginaDoFeed() {
+// Até onde cada pessoa rola o feed: a maioria fica na primeira página,
+// algumas rolam um pouco, e poucas vão bem fundo
+function ateOndeRola() {
   const sorteio = Math.random();
   if (sorteio < 0.6) return 1;
   if (sorteio < 0.9) return entre(2, 5);
-  return entre(6, 50);
+  return entre(6, 20);
+}
+
+// Quem rola o feed pede uma página depois da outra, como num app de verdade.
+// Cada usuário virtual do k6 lembra onde parou: da próxima vez que abrir o
+// feed, pede a página seguinte. Cada página é uma requisição.
+let rolagem = null;
+
+function abrirFeed(rede) {
+  if (!rolagem) rolagem = { usuario: sortear(rede.usuarios), pagina: 1, ate: ateOndeRola(), antesDe: null };
+  // A próxima página vai de dois jeitos, e cada etapa usa o seu: o número da
+  // página (OFFSET) ou o cursor, o criado_em do último post visto (antes_de)
+  const cursor = rolagem.antesDe ? `&antes_de=${encodeURIComponent(rolagem.antesDe)}` : '';
+  const r = enviar('GET', `/feed?usuario_id=${rolagem.usuario}&pagina=${rolagem.pagina}${cursor}`, null, 'feed');
+  if (!medir('feed', r, [200]) || rolagem.pagina >= rolagem.ate) {
+    rolagem = null; // chegou até onde queria (ou desistiu)
+    return;
+  }
+  const posts = r.json();
+  if (!posts.length) {
+    rolagem = null; // o feed acabou
+    return;
+  }
+  rolagem.pagina += 1;
+  rolagem.antesDe = posts[posts.length - 1].criado_em;
 }
 
 function postAlvo(rede, endpoint) {
@@ -230,7 +255,7 @@ export function acesso(rede) {
   const eu = entre(1, rede.totalDeUsuarios);
   const acao = sortearAcao();
   if (acao === 'feed') {
-    return medir('feed', enviar('GET', `/feed?usuario_id=${sortear(rede.usuarios)}&pagina=${paginaDoFeed()}`, null, 'feed'), [200]);
+    return abrirFeed(rede);
   }
   if (acao === 'perfil') {
     const quem = Math.random() < FRACAO_PERFIL_DA_CELEBRIDADE ? rede.celebridade : sortear(rede.usuarios);

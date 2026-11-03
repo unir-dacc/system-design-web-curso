@@ -33,6 +33,10 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    # O disco é SSD: ler um bloco fora de ordem custa quase o mesmo que ler em
+    # sequência. O padrão do Postgres (4) é do tempo do disco giratório, e faz o
+    # banco evitar o índice quando não precisaria.
+    command: postgres -c random_page_cost=1.1
     environment:
       POSTGRES_USER: mural
       POSTGRES_PASSWORD: mural

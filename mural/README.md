@@ -28,12 +28,14 @@ docker compose down -v                                       # derruba e apaga o
 | `01-monolito` | O ponto de partida: FastAPI síncrono, SQLAlchemy ORM do jeito mais direto, e Postgres |
 | `02-indices` | O banco no limite: os índices que as consultas do Mural precisam (e por que a ForeignKey não cria um) |
 | `03-n-mais-1` | O app vira o gargalo: o N+1 do ORM, e como montar uma página com poucas consultas |
+| `04-paginacao` | O índice não basta: a consulta do feed que deixa o índice trabalhar (`LATERAL`), e a paginação por cursor no lugar do `OFFSET` |
+| `05-custo-do-orm` | O app de novo no limite: medir onde ele gasta a CPU (`py-spy`), e o preço do ORM nas rotas mais acessadas |
 
 ## O Mural
 
 | Rota | O que faz |
 |------|-----------|
-| `GET /feed?usuario_id=&pagina=` | os posts de quem o usuário segue, dos mais novos para os mais antigos, de 20 em 20 |
+| `GET /feed?usuario_id=&pagina=` | os posts de quem o usuário segue, dos mais novos para os mais antigos, de 20 em 20 (a partir da etapa 04, a próxima página é `antes_de=`, o `criado_em` do último post visto) |
 | `GET /usuarios/{id}` | o perfil: o usuário e os posts dele |
 | `GET /posts/{id}` | o post com os comentários mais recentes |
 | `POST /posts` | publica: `{"usuario_id": 42, "texto": "..."}` |
@@ -58,7 +60,7 @@ A maior celebridade da rede publica um post que todo mundo quer ver. Uma rodada,
    Em cada degrau o teste confere se o Mural continua viável e descobre
    **quantas requisições por segundo ele aguenta**.
 2. **O pico:** por 1 minuto chegam 1.000 requisições por segundo. De cada 100, 70 abrem
-   o feed (a maioria fica na primeira página, poucos rolam bem fundo), 10 abrem um perfil,
+   o feed (a maioria fica na primeira página, poucos rolam bem fundo; quem rola pede uma página depois da outra), 10 abrem um perfil,
    10 abrem um post com os comentários, 7 curtem, 2 publicam e 1 comenta. A maior parte
    das curtidas, dos comentários e das visitas a posts vai para o post viral. Quem espera
    desiste depois de 5 s.
