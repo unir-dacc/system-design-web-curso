@@ -1,0 +1,96 @@
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.config import COMENTARIOS_POR_PAGINA
+from app.db import get_db
+from app.modelos import Comentario, Curtida, Post, Usuario
+from app.routes.esquemas import AutorOut, Curtir, Escrever, PostOut, post_out
+
+router = APIRouter(prefix="/posts", tags=["posts"])
+
+
+class ComentarioOut(BaseModel):
+    id: int
+    autor: AutorOut
+    texto: str
+    criado_em: datetime
+
+
+class PostComComentariosOut(PostOut):
+    comentarios: list[ComentarioOut]
+
+
+class CurtidasOut(BaseModel):
+    post_id: int
+    curtidas: int
+
+
+def buscar_post(db: Session, post_id: int) -> Post:
+    post = db.get(Post, post_id)
+    if post is None:
+        raise HTTPException(404, "Post não encontrado")
+    return post
+
+
+def conferir_usuario(db: Session, usuario_id: int) -> None:
+    if db.get(Usuario, usuario_id) is None:
+        raise HTTPException(404, "Usuário não encontrado")
+
+
+def comentario_out(comentario: Comentario) -> ComentarioOut:
+    autor = comentario.autor  # uma consulta por comentário, se o autor ainda não foi carregado
+    return ComentarioOut(id=comentario.id, autor=AutorOut(id=autor.id, nome=autor.nome), texto=comentario.texto, criado_em=comentario.criado_em)
+
+
+@router.post("", status_code=201, response_model=PostOut)
+def publicar(dados: Escrever, db: Session = Depends(get_db)):
+    conferir_usuario(db, dados.usuario_id)
+    post = Post(autor_id=dados.usuario_id, texto=dados.texto)
+    db.add(post)
+    db.commit()
+    return post_out(db, post)
+
+
+@router.get("/{post_id}", response_model=PostComComentariosOut)
+def ver_post(post_id: int, db: Session = Depends(get_db)):
+    """O post, com os comentários mais recentes."""
+    post = buscar_post(db, post_id)
+    # ⚠️ PROPOSITAL: sem índice em comentarios.post_id, achar os comentários de
+    # um post é ler a tabela inteira de comentários
+    comentarios = db.scalars(
+        select(Comentario).where(Comentario.post_id == post_id).order_by(Comentario.criado_em.desc()).limit(COMENTARIOS_POR_PAGINA)
+    ).all()
+    return PostComComentariosOut(**post_out(db, post).model_dump(), comentarios=[comentario_out(c) for c in comentarios])
+
+
+@router.post("/{post_id}/curtidas", response_model=CurtidasOut)
+def curtir(post_id: int, dados: Curtir, response: Response, db: Session = Depends(get_db)):
+    """Curte o post (201) e devolve o total de curtidas. Curtir de novo não conta duas vezes (200)."""
+    buscar_post(db, post_id)
+    conferir_usuario(db, dados.usuario_id)
+    response.status_code = 200
+    if db.get(Curtida, (post_id, dados.usuario_id)) is None:
+        db.add(Curtida(post_id=post_id, usuario_id=dados.usuario_id))
+        try:
+            db.commit()
+            response.status_code = 201
+        except IntegrityError:
+            db.rollback()  # o mesmo usuário curtiu duas vezes ao mesmo tempo: a chave primária barrou a segunda
+    # ⚠️ PROPOSITAL: o total é contado na hora, curtida por curtida
+    total = db.scalar(select(func.count()).select_from(Curtida).where(Curtida.post_id == post_id))
+    return CurtidasOut(post_id=post_id, curtidas=total)
+
+
+@router.post("/{post_id}/comentarios", status_code=201, response_model=ComentarioOut)
+def comentar(post_id: int, dados: Escrever, db: Session = Depends(get_db)):
+    buscar_post(db, post_id)
+    conferir_usuario(db, dados.usuario_id)
+    comentario = Comentario(post_id=post_id, autor_id=dados.usuario_id, texto=dados.texto)
+    db.add(comentario)
+    db.commit()
+    return comentario_out(comentario)
