@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.exc import TimeoutError as SemConexaoLivre
 
@@ -13,8 +13,11 @@ from app.routes import admin, links
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Na primeira subida, criar os links iniciais leva cerca de um minuto
+    # Na primeira subida, criar os links iniciais leva cerca de um minuto. Os
+    # backends que sobem junto esperam na trava, sem o limite de tempo das
+    # consultas (app/db.py): senão desistiriam antes de a carga terminar.
     with engine.begin() as conexao:
+        conexao.execute(text("SET LOCAL statement_timeout = 0"))
         conexao.execute(select(func.pg_advisory_xact_lock(0)))
         banco.preparar(conexao)
     yield

@@ -53,8 +53,6 @@ def codigo_valido(codigo: str) -> bool:
 
 def preparar(conexao: Connection) -> None:
     """Cria a tabela, os links que já existem quando a aula começa e o índice."""
-    # A carga inicial demora mais que o limite de tempo das consultas (app/db.py)
-    conexao.execute(text("SET LOCAL statement_timeout = 0"))
     conexao.execute(text(ESQUEMA))
     if not conexao.scalar(text("SELECT count(*) FROM (SELECT 1 FROM links LIMIT 1) t")):
         carregar_links_iniciais(conexao)
