@@ -8,7 +8,7 @@
 //      Em cada degrau conferimos se o Mural continua viável. É assim que
 //      descobrimos quantas requisições por segundo ele aguenta.
 //
-//   2. O PICO: por 1 minuto chega todo mundo de uma vez. De cada 100 requisições:
+//   2. O PICO: por 30 segundos chega todo mundo de uma vez. De cada 100 requisições:
 //      - 70 abrem o feed. A maioria das pessoas fica na primeira página,
 //        algumas rolam um pouco, e poucas vão bem fundo. Quem rola pede uma
 //        página depois da outra;
@@ -37,7 +37,7 @@ const HARDWARE = __ENV.HARDWARE || 'Postgres 1 CPU / 1 GB';
 // Cada rodada salva um resumo em relatorios/viral.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-ponto-de-partida', '02-indices'];
+const PASTAS_DAS_ETAPAS = ['01-ponto-de-partida', '02-codigo-robusto'];
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -48,16 +48,17 @@ const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   }).filter((resumo) => resumo.etapa.localeCompare(ETAPA) < 0),
 );
 
-// O pico: requisições por segundo durante 1 minuto
+// O pico: requisições por segundo durante 30 segundos
 const PICO = Number(__ENV.PICO || 1000);
-const PICO_S = 60;
+const PICO_S = 30;
 
-// A subida: cada degrau tem ~1,25× a 1,5× o anterior, sempre abaixo do pico
-const DEGRAUS = (__ENV.DEGRAUS || '2,5,10,20,30,40,50,60,75,100,125,150,200,250,300,500,750')
+// A subida: cada degrau tem 2× a 2,5× o anterior, sempre abaixo do pico. Poucos
+// degraus e curtos, para o teste inteiro caber em uns 2 minutos de aula
+const DEGRAUS = (__ENV.DEGRAUS || '2,5,10,20,50,100,200,500')
   .split(',')
   .map(Number)
   .filter((d) => d < PICO);
-const DURACAO_DEGRAU_S = 15;
+const DURACAO_DEGRAU_S = 10;
 const SUBIDA_S = DEGRAUS.length * DURACAO_DEGRAU_S;
 
 // O público: de cada 100 requisições
@@ -141,8 +142,8 @@ export const options = {
     ),
     pico: chegada(
       [
-        { duration: '10s', target: PICO }, // a notícia do post se espalha
-        { duration: `${PICO_S - 10}s`, target: PICO },
+        { duration: '5s', target: PICO }, // a notícia do post se espalha
+        { duration: `${PICO_S - 5}s`, target: PICO },
       ],
       PICO,
       { startTime: `${SUBIDA_S}s` },
@@ -483,7 +484,7 @@ ${degraus.join('\n')}
     Velocidade por endpoint (a subida inteira)
 ${tabelaDeEndpoints(r.endpoints.subida)}
 
-  2. O PICO: ${p.porSegundo} requisições/s, por 1 minuto
+  2. O PICO: ${p.porSegundo} requisições/s, por ${p.duracaoS} s
 
     Atendidas ....................... ${p.atendidas} de ${p.enviadas} (${pct(p.enviadas ? p.atendidas / p.enviadas : 0)})
     Nem chegaram a ser enviadas ..... ${p.naoEnviadas} (todos os usuários virtuais estavam esperando)

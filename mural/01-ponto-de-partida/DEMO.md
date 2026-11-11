@@ -28,7 +28,6 @@ docker compose up -d --build --wait
 
 A primeira subida cria a rede inteira (usuários, seguidores, posts, curtidas e comentários).
 Deixe abertas duas abas: http://localhost:8000/docs e um terminal com `docker compose stats`.
-Rode o teste uma vez antes da aula: logo depois da subida, o banco ainda não tem nada na memória.
 
 ---
 

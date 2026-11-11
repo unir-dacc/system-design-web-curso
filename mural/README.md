@@ -72,7 +72,7 @@ para a aula (`DEMO.md`): o que rodar, onde olhar e as perguntas para a turma.
 | Etapa | Tema |
 |:-----:|------|
 | [`01-ponto-de-partida`](01-ponto-de-partida/) | **O ponto de partida.** Um backend robusto (nginx e 4 réplicas async) na frente de um banco usado do jeito mais direto com o ORM. Quanto ele aguenta? |
-| [`02-indices`](02-indices/) | **O banco lendo tudo.** Os índices que as consultas do Mural precisam, e por que a ForeignKey não cria um |
+| [`02-codigo-robusto`](02-codigo-robusto/) | **O código robusto.** Sem peça nova: os índices certos, o fim do N+1, uma consulta do feed que deixa o índice trabalhar, a paginação por cursor e o total de curtidas guardado no post |
 
 > 🚧 **Em construção.** As próximas aulas vão atacar, uma de cada vez, os problemas que
 > aparecem no banco quando o Mural cresce.
@@ -91,7 +91,7 @@ aula mexe.
 
 | Rota | O que faz |
 |------|-----------|
-| `GET /feed?usuario_id=&pagina=` | os posts de quem o usuário segue, dos mais novos para os mais antigos, de 20 em 20 |
+| `GET /feed?usuario_id=&pagina=` | os posts de quem o usuário segue, dos mais novos para os mais antigos, de 20 em 20 (a partir da etapa 02, a próxima página é `antes_de=`, o `criado_em` do último post visto) |
 | `GET /usuarios/{id}` | o perfil: o usuário e os posts dele |
 | `GET /posts/{id}` | o post com os comentários mais recentes |
 | `POST /posts` | publica: `{"usuario_id": 42, "texto": "..."}` |
@@ -119,12 +119,12 @@ Um único teste de carga, [`shared/load-tests/viral.js`](shared/load-tests/viral
 em todas as aulas. A maior celebridade da rede publica um post, e todo mundo aparece.
 
 <p align="center">
-  <img src="imagens/teste.svg" alt="A subida em degraus crescentes, seguida do pico de 1.000 requisições por segundo por 1 minuto" width="90%">
+  <img src="imagens/teste.svg" alt="A subida em degraus crescentes, seguida do pico de 1.000 requisições por segundo por 30 segundos" width="90%">
 </p>
 
-1. **A subida:** as requisições chegam em degraus de 15 segundos. Em cada degrau o teste
+1. **A subida:** as requisições chegam em degraus de 10 segundos. Em cada degrau o teste
    confere se o Mural continua viável e descobre **quantas requisições por segundo ele aguenta**.
-2. **O pico:** por 1 minuto chegam **1.000 requisições por segundo**. A maioria das pessoas fica
+2. **O pico:** por 30 segundos chegam **1.000 requisições por segundo**. A maioria das pessoas fica
    na primeira página do feed, poucas rolam bem fundo, e quem rola pede uma página depois da
    outra. Quem espera desiste depois de 5 s.
 

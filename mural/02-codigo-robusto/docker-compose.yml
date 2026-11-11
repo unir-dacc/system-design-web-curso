@@ -1,4 +1,4 @@
-# Mural - Etapa 02 - Índices
+# Mural - Etapa 02 - Código robusto
 #
 # O lado do app é robusto e não tem limite de CPU: o nginx distribui entre 4
 # réplicas, cada uma com 4 processos. O que é escasso é o banco:
@@ -78,7 +78,7 @@ services:
       - ..:/curso:ro
     environment:
       BASE_URL: http://nginx
-      ETAPA: "Etapa 02 · Índices"
+      ETAPA: "Etapa 02 · Código robusto"
       # O que é limitado nesta etapa (aparece na comparação entre etapas)
       HARDWARE: "Postgres 1 CPU / 1 GB"
       # Ao final, o painel é salvo em relatorios/ultimo-teste.html

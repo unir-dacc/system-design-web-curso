@@ -263,7 +263,7 @@ export function gerarHtml(r) {
   <h1>O dia em que um post viralizou</h1>
   <p>O Mural já tem 100 mil usuários e 1 milhão de posts quando a maior celebridade da rede publica um post que todo mundo quer ver.
   Primeiro as requisições crescem aos poucos, para descobrir até onde ele aguenta. Depois, o pico: ${inteiro(p.porSegundo)} requisições
-  por segundo durante 1 minuto. De cada 100, 70 abrem o feed, 10 um perfil, 10 um post com os comentários, 7 curtem, 2 publicam e
+  por segundo durante ${p.duracaoS} segundos. De cada 100, 70 abrem o feed, 10 um perfil, 10 um post com os comentários, 7 curtem, 2 publicam e
   1 comenta, e a maior parte das curtidas, dos comentários e das visitas a posts vai para o post viral.</p>
 </div></header>
 <main>

@@ -18,6 +18,12 @@ async def reset(db: AsyncSession = Depends(get_db)):
     # Pode demorar mais que o limite das rotas normais
     await db.execute(text("SET LOCAL statement_timeout = 0"))
     marco = {"marco": await db.scalar(text("SELECT preparada_em FROM aula"))}
+    # O total guardado em cada post desconta as curtidas que vão ser apagadas
+    await db.execute(text("""
+        UPDATE posts SET curtidas = posts.curtidas - da_aula.curtidas
+        FROM (SELECT post_id, count(*) AS curtidas FROM curtidas WHERE criado_em > :marco GROUP BY post_id) da_aula
+        WHERE posts.id = da_aula.post_id
+    """), marco)
     await db.execute(text("DELETE FROM curtidas WHERE criado_em > :marco"), marco)
     await db.execute(text("DELETE FROM comentarios WHERE criado_em > :marco"), marco)
     await db.execute(text("DELETE FROM posts WHERE criado_em > :marco"), marco)

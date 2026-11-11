@@ -8,7 +8,7 @@ Mural faz (os posts de um autor, os comentários de um post).
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -44,6 +44,9 @@ class Post(Base):
     autor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
     texto: Mapped[str] = mapped_column(Text)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # O total de curtidas, guardado no próprio post: cada curtida nova soma 1 aqui,
+    # na mesma transação. Mostrar o total é ler uma coluna, e não contar linhas.
+    curtidas: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Curtida(Base):

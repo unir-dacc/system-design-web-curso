@@ -17,24 +17,17 @@
 
   <!-- a subida: degraus crescentes -->
   <g fill="url(#degrau)">
-    <rect x="70"  y="292" width="34" height="8"   rx="3"/>
-    <rect x="108" y="286" width="34" height="14"  rx="3"/>
-    <rect x="146" y="278" width="34" height="22"  rx="3"/>
-    <rect x="184" y="268" width="34" height="32"  rx="3"/>
-    <rect x="222" y="258" width="34" height="42"  rx="3"/>
-    <rect x="260" y="248" width="34" height="52"  rx="3"/>
-    <rect x="298" y="238" width="34" height="62"  rx="3"/>
-    <rect x="336" y="226" width="34" height="74"  rx="3"/>
-    <rect x="374" y="212" width="34" height="88"  rx="3"/>
-    <rect x="412" y="196" width="34" height="104" rx="3"/>
-    <rect x="450" y="180" width="34" height="120" rx="3"/>
-    <rect x="488" y="164" width="34" height="136" rx="3"/>
-    <rect x="526" y="146" width="34" height="154" rx="3"/>
-    <rect x="564" y="128" width="34" height="172" rx="3"/>
-    <rect x="602" y="110" width="34" height="190" rx="3"/>
+    <rect x="70" y="290" width="64" height="10" rx="4"/>
+    <rect x="142" y="278" width="64" height="22" rx="4"/>
+    <rect x="214" y="262" width="64" height="38" rx="4"/>
+    <rect x="286" y="240" width="64" height="60" rx="4"/>
+    <rect x="358" y="208" width="64" height="92" rx="4"/>
+    <rect x="430" y="172" width="64" height="128" rx="4"/>
+    <rect x="502" y="134" width="64" height="166" rx="4"/>
+    <rect x="574" y="100" width="64" height="200" rx="4"/>
   </g>
   <text x="352" y="330" text-anchor="middle" fill="#5b21b6" font-size="19" font-weight="700">1. A subida</text>
-  <text x="352" y="354" text-anchor="middle" fill="#6b7280" font-size="15">degraus de 15 s: 2 por segundo, 5, 10, 20...</text>
+  <text x="352" y="354" text-anchor="middle" fill="#6b7280" font-size="15">degraus de 10 s: 2 por segundo, 5, 10, 20...</text>
   <text x="352" y="376" text-anchor="middle" fill="#6b7280" font-size="15">até onde o Mural continua viável?</text>
 
   <!-- o pico -->
@@ -43,7 +36,7 @@
     <path transform="translate(790 150) scale(1.6)" d="M12 21.4 10.6 20.1C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.6 11.6L12 21.4z"/>
   </g>
   <text x="805" y="232" text-anchor="middle" fill="#ffffff" font-size="22" font-weight="800">1.000 por segundo</text>
-  <text x="805" y="258" text-anchor="middle" fill="#ffffff" font-size="15">por 1 minuto</text>
+  <text x="805" y="258" text-anchor="middle" fill="#ffffff" font-size="15">por 30 segundos</text>
   <text x="805" y="330" text-anchor="middle" fill="#9d174d" font-size="19" font-weight="700">2. O pico</text>
   <text x="805" y="354" text-anchor="middle" fill="#6b7280" font-size="15">todo mundo quer ver o post viral</text>
   <text x="805" y="376" text-anchor="middle" fill="#6b7280" font-size="15">quem espera desiste depois de 5 s</text>

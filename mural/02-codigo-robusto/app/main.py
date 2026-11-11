@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title="Mural", version="02-indices", lifespan=lifespan)
+app = FastAPI(title="Mural", version="02-codigo-robusto", lifespan=lifespan)
 
 
 # O banco não deu conta a tempo: responde 503 na hora, em vez de deixar a

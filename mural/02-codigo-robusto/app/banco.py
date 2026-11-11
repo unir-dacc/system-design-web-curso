@@ -34,6 +34,13 @@ LOREM = (
     "que terminei aquele livro, que final! Rodei o teste de carga e o servidor pediu socorro. Bom dia, mural!"
 )
 
+# O total de curtidas de cada post, contado a partir das curtidas que já existem
+TOTAIS_DE_CURTIDAS = """
+    UPDATE posts SET curtidas = total.curtidas
+    FROM (SELECT post_id, count(*) AS curtidas FROM curtidas GROUP BY post_id) total
+    WHERE posts.id = total.post_id
+"""
+
 CARGA = [
     # Durante a carga, o banco não confere as ForeignKeys linha a linha (são
     # milhões de conferências): os dados gerados aqui já são válidos
@@ -79,6 +86,8 @@ CARGA = [
     GROUP BY 1, 2
     ORDER BY 1, 2
     """,
+    # O total de curtidas de cada post, guardado no próprio post
+    TOTAIS_DE_CURTIDAS,
     """
     INSERT INTO comentarios (id, post_id, autor_id, texto, criado_em)
     SELECT g,
@@ -99,7 +108,11 @@ CARGA = [
 
 
 def preparar(conexao: Connection) -> None:
-    """Cria as tabelas, a rede que já existe quando a aula começa e os índices."""
+    """Cria as tabelas, a rede que já existe quando a aula começa e os índices.
+
+    Se o banco já tem a rede da etapa 01, aproveita: só acrescenta o que esta
+    etapa tem a mais (o total de curtidas nos posts e os índices).
+    """
     # As tabelas primeiro, sem os índices de app/modelos.py (create_all criaria
     # os dois juntos)
     for tabela in Base.metadata.sorted_tables:
@@ -107,6 +120,14 @@ def preparar(conexao: Connection) -> None:
     conexao.execute(text(AULA))
     if not conexao.scalar(text("SELECT count(*) FROM aula")):
         carregar_rede_inicial(conexao)
+    # Vindo da etapa 01, a rede já existe, mas a tabela de posts ainda não tem o
+    # total de curtidas: acrescenta a coluna e conta o que já está lá
+    tem_o_total = conexao.scalar(text(
+        "SELECT count(*) FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'curtidas'"
+    ))
+    if not tem_o_total:
+        conexao.execute(text("ALTER TABLE posts ADD COLUMN curtidas integer NOT NULL DEFAULT 0"))
+        conexao.execute(text(TOTAIS_DE_CURTIDAS))
     # Depois da carga: encher a tabela sem índice e criar o índice no fim é bem
     # mais rápido do que atualizar o índice a cada linha inserida
     for tabela in Base.metadata.sorted_tables:
