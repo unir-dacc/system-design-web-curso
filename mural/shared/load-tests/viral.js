@@ -295,6 +295,8 @@ export function setup() {
     timeout: '60s',
   });
   if (r.status !== 201) exec.test.abort('Não deu para publicar o post viral');
+  // Daqui em diante, as estatísticas de cada consulta (pgHero) contam só a rodada
+  http.post(`${BASE}/admin/estatisticas/zerar`, null, { timeout: '10s' });
   return {
     usuarios: amostra.usuarios,
     posts: amostra.posts,

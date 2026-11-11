@@ -115,6 +115,8 @@ def preparar(conexao: Connection) -> bool:
     precisou reescrever os posts (na carga ou ao acrescentar o total).
     """
     mexeu = False
+    # As estatísticas de cada consulta (o pg_stat_statements do docker-compose.yml)
+    conexao.execute(text("CREATE EXTENSION IF NOT EXISTS pg_stat_statements"))
     # As tabelas primeiro, sem os índices de app/modelos.py (create_all criaria
     # os dois juntos)
     for tabela in Base.metadata.sorted_tables:

@@ -59,6 +59,7 @@ relatório completo fica em **`relatorios/viral.html`**.
 ```bash
 docker compose stats                          # CPU e memória de cada peça, ao vivo
 docker compose exec postgres psql -U mural    # o banco, para olhar por dentro
+docker compose --profile observar up -d pghero   # painel do banco em http://localhost:8080
 docker compose down -v                        # derruba e apaga os dados
 ```
 
@@ -136,9 +137,14 @@ No fim, o relatório (`relatorios/viral.html`) mostra:
 
 - 📈 **a capacidade:** até quantas requisições por segundo o Mural aguenta;
 - 🪜 **a progressão:** degrau a degrau, quantas chegaram e quantas foram atendidas;
-- ⏱️ **a velocidade de cada endpoint**, na subida e no pico;
+- ⏱️ **a velocidade de cada endpoint**, no último degrau viável e no pico;
 - ❤️ **a conferência das curtidas do post viral:** quantas estão gravadas no banco e quantas o Mural mostra;
 - 🏁 **a comparação com as etapas anteriores**, lado a lado.
+
+E para ver o que aconteceu **dentro do banco** durante a rodada, o **pgHero**
+(`docker compose --profile observar up -d pghero`, em **http://localhost:8080**) mostra
+as consultas que mais tomaram tempo do Postgres, os índices e as tabelas. As estatísticas
+são zeradas no começo de cada teste, então ele mostra só a rodada.
 
 ## 📏 As regras do jogo
 

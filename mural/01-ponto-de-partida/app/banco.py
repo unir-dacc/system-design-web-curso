@@ -99,6 +99,8 @@ CARGA = [
 
 def preparar(conexao: Connection) -> None:
     """Cria as tabelas e, na primeira subida, a rede que já existe quando a aula começa."""
+    # As estatísticas de cada consulta (o pg_stat_statements do docker-compose.yml)
+    conexao.execute(text("CREATE EXTENSION IF NOT EXISTS pg_stat_statements"))
     Base.metadata.create_all(conexao)
     conexao.execute(text(AULA))
     if conexao.scalar(text("SELECT count(*) FROM aula")):

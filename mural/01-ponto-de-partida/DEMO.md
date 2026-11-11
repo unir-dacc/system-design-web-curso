@@ -109,6 +109,37 @@ Pergunta: *"depois que o pico passa, o Mural volta a responder? O que impede que
 
 Anote o número do topo: ele vai ser comparado com o das próximas etapas.
 
+## 5. Onde o banco gastou o tempo
+
+Suba o painel do banco, o pgHero, e abra http://localhost:8080:
+
+```bash
+docker compose --profile observar up -d pghero
+```
+
+**Durante o teste** (rode de novo, se precisar), num terceiro terminal: o que cada conexão do banco
+está fazendo, atualizado a cada segundo (Ctrl+C para sair):
+
+```bash
+echo "SELECT state AS estado, coalesce(wait_event_type, 'CPU') AS esperando, count(*) AS conexoes
+  FROM pg_stat_activity WHERE datname = 'mural' AND pid <> pg_backend_pid()
+  GROUP BY 1, 2 ORDER BY 3 DESC \watch 1" | docker compose exec -T postgres psql -U mural
+```
+
+👉 **Observe:** quantas conexões estão trabalhando (`active`) e quantas estão paradas (`idle`), e o que as ativas esperam.
+
+**Depois do teste:** no pgHero, a aba **Queries** lista as consultas da rodada pelo tempo total
+que elas tomaram do banco. O mesmo, no terminal:
+
+```bash
+docker compose exec postgres psql -U mural -c "SELECT calls AS vezes, round(mean_exec_time::numeric, 1) AS media_ms,
+  round((100 * total_exec_time / sum(total_exec_time) OVER ())::numeric, 1) AS pct_do_tempo, left(query, 60) AS consulta
+  FROM pg_stat_statements WHERE query NOT ILIKE '%pg_stat%' ORDER BY total_exec_time DESC LIMIT 5"
+```
+
+Pergunta: *"qual consulta tomou mais tempo do banco? Ela é lenta, ou roda muitas vezes? E as consultas que
+rodam mais vezes, de onde vêm?"*
+
 ---
 
 ## Para fechar a aula

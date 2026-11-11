@@ -52,3 +52,14 @@ async def curtidas_registradas(post_id: int, db: AsyncSession = Depends(get_db))
     """
     total = await db.scalar(text("SELECT count(*) FROM curtidas WHERE post_id = :post_id"), {"post_id": post_id})
     return {"post_id": post_id, "curtidas": total}
+
+
+@router.post("/estatisticas/zerar")
+async def zerar_estatisticas(db: AsyncSession = Depends(get_db)):
+    """Zera as estatísticas de cada consulta (pg_stat_statements).
+
+    O teste de carga chama no fim da preparação: depois dele, o pgHero e o
+    pg_stat_statements mostram só as consultas da rodada.
+    """
+    await db.execute(text("SELECT pg_stat_statements_reset()"))
+    return {"status": "estatísticas zeradas"}
