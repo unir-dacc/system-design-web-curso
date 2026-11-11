@@ -45,6 +45,9 @@ services:
     # sequência. O padrão do Postgres (4) é do tempo do disco giratório, e faz o
     # banco evitar o índice quando não precisaria.
     command: postgres -c random_page_cost=1.1
+    # A memória compartilhada do container (/dev/shm). O padrão do Docker, 64 MB,
+    # não basta para o VACUUM e as consultas em paralelo do Postgres
+    shm_size: 256mb
     environment:
       POSTGRES_USER: mural
       POSTGRES_PASSWORD: mural

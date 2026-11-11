@@ -122,7 +122,7 @@ em todas as aulas. A maior celebridade da rede publica um post, e todo mundo apa
   <img src="imagens/teste.svg" alt="A subida em degraus crescentes, seguida do pico de 1.000 requisições por segundo por 30 segundos" width="90%">
 </p>
 
-1. **A subida:** as requisições chegam em degraus de 10 segundos. Em cada degrau o teste
+1. **A subida:** as requisições chegam em degraus de 10 segundos (1 por segundo, 2, 5, 10...). Em cada degrau o teste
    confere se o Mural continua viável e descobre **quantas requisições por segundo ele aguenta**.
 2. **O pico:** por 30 segundos chegam **1.000 requisições por segundo**. A maioria das pessoas fica
    na primeira página do feed, poucas rolam bem fundo, e quem rola pede uma página depois da

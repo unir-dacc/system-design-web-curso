@@ -294,14 +294,14 @@ export function gerarHtml(r) {
   <div class="bloco">${comparacao(r.comparacao)}</div>
 
   <h2>1 · A subida: quantas requisições por segundo o Mural aguenta?</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">Degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% dos feeds levam até ${tempo(r.metas.feedMs)}, 95% das escritas (curtir, publicar, comentar) até ${tempo(r.metas.escritaMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">Degraus de ${s.duracaoDegrauS} s (os mais baixos duram mais, para ter pelo menos ${s.minimoDeRequisicoes} requisições). Um degrau é viável quando 95% dos feeds levam até ${tempo(r.metas.feedMs)}, 95% das escritas (curtir, publicar, comentar) até ${tempo(r.metas.escritaMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas)}</div>
 
-  <h2>1 · A subida: a velocidade de cada endpoint</h2>
-  <div class="bloco">${tabelaDeEndpoints(r.endpoints.subida)}</div>
+  <h2>1 · A subida: a velocidade de cada endpoint ${s.capacidade ? `com ${inteiro(s.capacidade.porSegundo)}/s, o último degrau viável` : ''}</h2>
+  ${s.capacidade ? `<div class="bloco">${tabelaDeEndpoints(r.endpoints.capacidade)}</div>` : '<p class="detalhe">Nenhum degrau foi viável.</p>'}
 
   <h2>2 · O pico: a velocidade de cada endpoint</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">Todo mundo junto. Requisições que nem chegaram a ser enviadas (todos esperando): <b>${inteiro(p.naoEnviadas)}</b>.</p>
+  <p class="detalhe" style="margin:-6px 0 14px">Todo mundo junto.${p.naoEnviadas ? ` <b>${inteiro(p.naoEnviadas)}</b> requisições nem chegaram a ser enviadas: todos os usuários virtuais estavam esperando.` : ''}</p>
   <div class="bloco">${tabelaDeEndpoints(r.endpoints.pico)}</div>
 
   <h2>Metas do pico</h2>

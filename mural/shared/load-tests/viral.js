@@ -54,12 +54,17 @@ const PICO_S = 30;
 
 // A subida: cada degrau tem 2× a 2,5× o anterior, sempre abaixo do pico. Poucos
 // degraus e curtos, para o teste inteiro caber em uns 2 minutos de aula
-const DEGRAUS = (__ENV.DEGRAUS || '2,5,10,20,50,100,200,500')
+const DEGRAUS = (__ENV.DEGRAUS || '1,2,5,10,20,50,100,200,500')
   .split(',')
   .map(Number)
   .filter((d) => d < PICO);
+// Cada degrau dura 10 s, mas nunca menos que o tempo de chegarem 30
+// requisições: com poucas, os "95% em até" do degrau seriam só o pior caso
 const DURACAO_DEGRAU_S = 10;
-const SUBIDA_S = DEGRAUS.length * DURACAO_DEGRAU_S;
+const MINIMO_DE_REQUISICOES = 30;
+const DURACOES = DEGRAUS.map((d) => Math.max(DURACAO_DEGRAU_S, Math.ceil(MINIMO_DE_REQUISICOES / d)));
+const INICIOS = DURACOES.map((_, i) => DURACOES.slice(0, i).reduce((s, x) => s + x, 0));
+const SUBIDA_S = DURACOES.reduce((s, x) => s + x, 0);
 
 // O público: de cada 100 requisições
 const MISTURA = [
@@ -93,7 +98,6 @@ const ENDPOINTS = {
   comentar: 'POST /posts/{id}/comentarios',
 };
 const ESCRITAS = ['curtir', 'publicar', 'comentar'];
-const PARTES = ['subida', 'pico'];
 const RESULTADOS = ['ok', 'erro', 'barrada'];
 
 // --- Métricas ---
@@ -134,9 +138,9 @@ function guardar(metricas, condicao = 'count>=0') {
 export const options = {
   scenarios: {
     subida: chegada(
-      DEGRAUS.flatMap((d) => [
+      DEGRAUS.flatMap((d, i) => [
         { duration: '2s', target: d },
-        { duration: `${DURACAO_DEGRAU_S - 2}s`, target: d },
+        { duration: `${DURACOES[i] - 2}s`, target: d },
       ]),
       Math.max(...DEGRAUS),
     ),
@@ -151,17 +155,17 @@ export const options = {
   },
   thresholds: {
     [`tempo{endpoint:feed,parte:pico}`]: [`p(95)<${META_FEED_MS}`],
-    ...guardar(
-      PARTES.flatMap((parte) =>
-        Object.keys(ENDPOINTS).flatMap((endpoint) =>
-          RESULTADOS.map((resultado) => `requisicoes{endpoint:${endpoint},parte:${parte},resultado:${resultado}}`),
-        ),
-      ),
-    ),
-    ...guardar(PARTES.flatMap((parte) => Object.keys(ENDPOINTS).map((endpoint) => `tempo{endpoint:${endpoint},parte:${parte}}`)), 'max>=0'),
+    // Cada endpoint no pico, e cada endpoint em cada degrau da subida
+    ...guardar(Object.keys(ENDPOINTS).flatMap((endpoint) => RESULTADOS.map((resultado) => `requisicoes{endpoint:${endpoint},parte:pico,resultado:${resultado}}`))),
+    ...guardar(Object.keys(ENDPOINTS).map((endpoint) => `tempo{endpoint:${endpoint},parte:pico}`), 'max>=0'),
     ...guardar(DEGRAUS.flatMap((d) => RESULTADOS.map((resultado) => `requisicoes{degrau:${d},resultado:${resultado}}`))),
     ...guardar(
-      DEGRAUS.flatMap((d) => [`tempo{degrau:${d},endpoint:feed}`, `tempo{degrau:${d},tipo:escrita}`]),
+      DEGRAUS.flatMap((d) =>
+        Object.keys(ENDPOINTS).flatMap((endpoint) => RESULTADOS.map((resultado) => `requisicoes{degrau:${d},endpoint:${endpoint},resultado:${resultado}}`)),
+      ),
+    ),
+    ...guardar(
+      DEGRAUS.flatMap((d) => [...Object.keys(ENDPOINTS).map((endpoint) => `tempo{degrau:${d},endpoint:${endpoint}}`), `tempo{degrau:${d},tipo:escrita}`]),
       'max>=0',
     ),
     ...guardar(['dropped_iterations{scenario:pico}', 'dropped_iterations{scenario:subida}']),
@@ -175,7 +179,9 @@ export const options = {
 
 function degrauAtual() {
   const segundos = (Date.now() - exec.scenario.startTime) / 1000;
-  return DEGRAUS[Math.min(Math.floor(segundos / DURACAO_DEGRAU_S), DEGRAUS.length - 1)];
+  let i = 0;
+  while (i + 1 < DEGRAUS.length && INICIOS[i + 1] <= segundos) i += 1;
+  return DEGRAUS[i];
 }
 
 const noPico = () => exec.scenario.name === 'pico';
@@ -322,7 +328,7 @@ function calcularResultado(data) {
   const p95 = (nome) => v(nome)['p(95)'] || undefined;
 
   // 1. A subida
-  const degraus = DEGRAUS.map((d) => {
+  const degraus = DEGRAUS.map((d, i) => {
     const conta = (resultado) => n(`requisicoes{degrau:${d},resultado:${resultado}}`);
     const total = conta('ok') + conta('erro') + conta('barrada');
     const p95Feed = p95(`tempo{degrau:${d},endpoint:feed}`);
@@ -330,7 +336,8 @@ function calcularResultado(data) {
     const erros = total ? (conta('erro') + conta('barrada')) / total : undefined;
     return {
       porSegundo: d,
-      atendidasPorSegundo: conta('ok') / DURACAO_DEGRAU_S,
+      atendidasPorSegundo: conta('ok') / DURACOES[i],
+      duracaoS: DURACOES[i],
       p95Feed,
       p95Escrita,
       erros,
@@ -344,13 +351,14 @@ function calcularResultado(data) {
   const capacidade = viaveis.length ? viaveis[viaveis.length - 1] : null;
   const quebrou = degraus.find((d) => !d.viavel && (!capacidade || d.porSegundo > capacidade.porSegundo)) || null;
 
-  // Velocidade por endpoint em cada parte
-  const porEndpoint = (parte, duracaoS) =>
+  // Velocidade por endpoint: no pico, e no último degrau viável da subida (os
+  // degraus em que o Mural já caiu fariam qualquer endpoint parecer lento)
+  const porEndpoint = (filtro, duracaoS) =>
     Object.entries(ENDPOINTS)
       .map(([endpoint, nome]) => {
-        const conta = (resultado) => n(`requisicoes{endpoint:${endpoint},parte:${parte},resultado:${resultado}}`);
+        const conta = (resultado) => n(`requisicoes{${filtro(endpoint)},resultado:${resultado}}`);
         const total = conta('ok') + conta('erro') + conta('barrada');
-        const t = v(`tempo{endpoint:${endpoint},parte:${parte}}`);
+        const t = v(`tempo{${filtro(endpoint)}}`);
         return {
           nome,
           porSegundo: total / duracaoS,
@@ -365,7 +373,7 @@ function calcularResultado(data) {
         };
       })
       .filter((e) => e.total > 0);
-  const doPico = porEndpoint('pico', PICO_S);
+  const doPico = porEndpoint((endpoint) => `endpoint:${endpoint},parte:pico`, PICO_S);
   const enviadasNoPico = doPico.reduce((s, e) => s + e.total, 0);
   const atendidasNoPico = doPico.reduce((s, e) => s + e.ok, 0);
   const naoEnviadas = n('dropped_iterations{scenario:pico}');
@@ -384,6 +392,7 @@ function calcularResultado(data) {
     subida: {
       degraus,
       duracaoDegrauS: DURACAO_DEGRAU_S,
+      minimoDeRequisicoes: MINIMO_DE_REQUISICOES,
       capacidade,
       quebrou,
       caiuEm: degraus.find((d) => d.erros !== undefined && d.erros >= 0.5) || null,
@@ -399,7 +408,12 @@ function calcularResultado(data) {
     // As curtidas do post viral: quantas estão gravadas no banco, e quantas o Mural mostra
     curtidas: { registradas: v('curtidas_registradas').value, contadas: v('curtidas_contadas').value },
     progressao,
-    endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: doPico },
+    endpoints: {
+      capacidade: capacidade
+        ? porEndpoint((endpoint) => `degrau:${capacidade.porSegundo},endpoint:${endpoint}`, capacidade.duracaoS)
+        : [],
+      pico: doPico,
+    },
     metas: {
       feedMs: META_FEED_MS,
       escritaMs: META_ESCRITA_MS,
@@ -481,13 +495,12 @@ function gerarTexto(r) {
     chegando   atendidas/s   95% feed   95% escrita   erros/barradas   viável?
 ${degraus.join('\n')}
 
-    Velocidade por endpoint (a subida inteira)
-${tabelaDeEndpoints(r.endpoints.subida)}
+${s.capacidade ? `    Velocidade por endpoint com ${s.capacidade.porSegundo}/s, o último degrau viável\n${tabelaDeEndpoints(r.endpoints.capacidade)}` : '    Nenhum degrau foi viável.'}
 
   2. O PICO: ${p.porSegundo} requisições/s, por ${p.duracaoS} s
 
     Atendidas ....................... ${p.atendidas} de ${p.enviadas} (${pct(p.enviadas ? p.atendidas / p.enviadas : 0)})
-    Nem chegaram a ser enviadas ..... ${p.naoEnviadas} (todos os usuários virtuais estavam esperando)
+    Nem chegaram a ser enviadas ..... ${p.naoEnviadas}${p.naoEnviadas ? ' (todos os usuários virtuais estavam esperando)' : ''}
     Feed ............................ metade em até ${seg(p.feed.mediana)}, 95% em até ${seg(p.feed.p95)}, o pior ${seg(p.feed.pior)}
 
     Velocidade por endpoint

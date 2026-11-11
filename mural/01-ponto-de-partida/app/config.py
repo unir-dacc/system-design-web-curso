@@ -8,9 +8,11 @@ DATABASE_URL_CARGA = os.getenv("DATABASE_URL_CARGA", "postgresql+psycopg://mural
 # × conexões precisa caber no max_connections do Postgres (100, o padrão).
 CONEXOES_POR_PROCESSO = int(os.getenv("CONEXOES_POR_PROCESSO", "5"))
 
-# Quanto tempo uma requisição pode esperar o banco: depois disso, quem pediu já
-# desistiu (o público desiste em 5 s), e continuar só ocuparia o banco à toa
-LIMITE_DO_BANCO_S = 5
+# Quanto tempo uma requisição pode esperar o banco. O público desiste em 5 s:
+# o Mural desiste antes (2 s esperando uma conexão livre + 3 s de consulta) e
+# responde 503 na hora, em vez de ocupar o banco com quem já foi embora
+ESPERA_POR_CONEXAO_S = 2
+LIMITE_DA_CONSULTA_S = 3
 
 # O tamanho da rede quando a aula começa (criada na primeira subida)
 USUARIOS_INICIAIS = int(os.getenv("USUARIOS_INICIAIS", "100000"))

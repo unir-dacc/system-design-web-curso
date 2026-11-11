@@ -25,7 +25,7 @@ docker compose up -d --build --wait     # aproveita o banco da etapa 01
 ```
 
 A 02 usa os mesmos nomes da 01 e aproveita a rede que já está no banco: ao subir, ela só
-acrescenta o total de curtidas nos posts e os índices, em alguns segundos.
+acrescenta o total de curtidas nos posts e os índices, em menos de um minuto.
 
 Rode o teste da etapa 01 antes da aula: o relatório desta etapa compara com o último resultado dela.
 

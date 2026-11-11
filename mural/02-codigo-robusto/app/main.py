@@ -1,9 +1,10 @@
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
@@ -18,11 +19,29 @@ CONSULTA_CANCELADA = "57014"
 
 def preparar_o_banco():
     # Todos os processos de todas as réplicas sobem juntos: a trava faz um de
-    # cada vez passar por aqui, e só o primeiro cria a rede inicial
+    # cada vez passar por aqui, e só o primeiro cria a rede inicial (ou
+    # acrescenta o que falta na rede da etapa 01)
     carga = create_engine(DATABASE_URL_CARGA)
-    with carga.begin() as conexao:
-        conexao.execute(select(func.pg_advisory_xact_lock(0)))
-        banco.preparar(conexao)
+    with carga.connect() as conexao:
+        # Tenta pegar a trava a cada meio segundo, em vez de ficar parado esperando:
+        # quem espera parado segura uma foto antiga do banco, e o VACUUM lá embaixo
+        # não pode apagar as linhas que essa foto ainda enxerga
+        while not conexao.scalar(select(func.pg_try_advisory_lock(0))):
+            conexao.commit()
+            time.sleep(0.5)
+        conexao.commit()
+        with conexao.begin():
+            mexeu = banco.preparar(conexao)
+        if mexeu:
+            # Preencher o total de curtidas reescreveu boa parte dos posts e deixou
+            # linhas mortas para trás. Limpa agora, antes de abrir as portas: senão
+            # a limpeza automática (o autovacuum) roda no meio da aula. E grava no
+            # disco tudo o que foi escrito (CHECKPOINT), pelo mesmo motivo
+            sem_transacao = conexao.execution_options(isolation_level="AUTOCOMMIT")
+            sem_transacao.execute(text("VACUUM ANALYZE posts"))
+            sem_transacao.execute(text("CHECKPOINT"))
+        conexao.execute(select(func.pg_advisory_unlock(0)))
+        conexao.commit()
     carga.dispose()
 
 

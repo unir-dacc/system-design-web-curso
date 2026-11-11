@@ -107,12 +107,14 @@ CARGA = [
 ]
 
 
-def preparar(conexao: Connection) -> None:
+def preparar(conexao: Connection) -> bool:
     """Cria as tabelas, a rede que já existe quando a aula começa e os índices.
 
     Se o banco já tem a rede da etapa 01, aproveita: só acrescenta o que esta
-    etapa tem a mais (o total de curtidas nos posts e os índices).
+    etapa tem a mais (o total de curtidas nos posts e os índices). Devolve se
+    precisou reescrever os posts (na carga ou ao acrescentar o total).
     """
+    mexeu = False
     # As tabelas primeiro, sem os índices de app/modelos.py (create_all criaria
     # os dois juntos)
     for tabela in Base.metadata.sorted_tables:
@@ -120,6 +122,7 @@ def preparar(conexao: Connection) -> None:
     conexao.execute(text(AULA))
     if not conexao.scalar(text("SELECT count(*) FROM aula")):
         carregar_rede_inicial(conexao)
+        mexeu = True
     # Vindo da etapa 01, a rede já existe, mas a tabela de posts ainda não tem o
     # total de curtidas: acrescenta a coluna e conta o que já está lá
     tem_o_total = conexao.scalar(text(
@@ -128,11 +131,13 @@ def preparar(conexao: Connection) -> None:
     if not tem_o_total:
         conexao.execute(text("ALTER TABLE posts ADD COLUMN curtidas integer NOT NULL DEFAULT 0"))
         conexao.execute(text(TOTAIS_DE_CURTIDAS))
+        mexeu = True
     # Depois da carga: encher a tabela sem índice e criar o índice no fim é bem
     # mais rápido do que atualizar o índice a cada linha inserida
     for tabela in Base.metadata.sorted_tables:
         for indice in tabela.indexes:
             indice.create(conexao, checkfirst=True)
+    return mexeu
 
 
 def carregar_rede_inicial(conexao: Connection) -> None:
