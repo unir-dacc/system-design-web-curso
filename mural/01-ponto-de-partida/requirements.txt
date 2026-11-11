@@ -1,7 +1,0 @@
-fastapi==0.115.5
-# [standard]: o leitor de HTTP em C (httptools) e o uvloop, no lugar das versões em Python puro
-uvicorn[standard]==0.32.1
-sqlalchemy[asyncio]==2.0.36
-# As rotas falam com o banco pelo asyncpg; a carga inicial, pelo psycopg
-asyncpg==0.30.0
-psycopg[binary]==3.2.3

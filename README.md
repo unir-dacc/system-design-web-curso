@@ -10,7 +10,6 @@ problema que a turma acabou de ver acontecer num teste de carga.
 | Lab | A aplicação | O que ele ensina |
 |-----|-------------|------------------|
 | [`ingressa/`](ingressa/) | **Ingressa**: venda de ingressos de cinema na estreia do maior filme da história | picos de acesso, cache, balanceamento, rate limit, filas, sala de espera, hardware e linguagem |
-| [`mural/`](mural/) | **Mural**: uma rede social no dia em que um post viralizou | os problemas de banco de dados: índices, N+1, paginação, contadores disputados, celebridades, réplicas *(em construção)* |
 
 Cada lab tem o seu próprio `README.md`, e cada etapa tem um `DEMO.md`: o roteiro da aula, com os comandos na ordem.
 
