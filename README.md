@@ -18,6 +18,7 @@ A ordem é a ordem lógica do curso.
 | `04-rate-limit` | O excesso no pico | o Nginx limita as requisições em andamento de cada endpoint |
 | `04b-async` | Esperar sem prender uma thread | a 04 com o Ingressa assíncrono: quando o async ajuda, e quando não |
 | `04c-em-go` | A linguagem sem a arquitetura | a 04 reescrita em Go: dá para trocar a fila e a sala de espera por uma linguagem mais rápida? |
+| `04d-python-no-limite` | Python no limite | a 04 com o Python otimizado ao máximo (Granian, msgspec, asyncpg, mypyc): dá para alcançar o Go? |
 | `05-fila` | O que não precisa ser feito agora | a compra vai para uma fila; um worker conclui e avisa por e-mail |
 | `06-sala-de-espera` | Quem não pode ser perdido | senha, porteiro e passe: quem chega no pico espera a vez |
 | `07-mais-hardware` | O que o dinheiro resolve | a 06 com 8 CPUs e 8 GB, numa estreia 5 vezes maior |
@@ -98,6 +99,7 @@ o link).
 | `04-rate-limit` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04-rate-limit/arquitetura.excalidraw) |
 | `04b-async` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04b-async/arquitetura.excalidraw) |
 | `04c-em-go` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04c-em-go/arquitetura.excalidraw) |
+| `04d-python-no-limite` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04d-python-no-limite/arquitetura.excalidraw) |
 | `05-fila` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/05-fila/arquitetura.excalidraw) |
 | `06-sala-de-espera` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/06-sala-de-espera/arquitetura.excalidraw) |
 | `07-mais-hardware` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-mais-hardware/arquitetura.excalidraw) |
@@ -123,6 +125,7 @@ system-design-web-curso/
 ├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
 ├── 04b-async/                   # a 04 com o Ingressa assíncrono (async/await)
 ├── 04c-em-go/                   # a 04 reescrita em Go: a linguagem contra a arquitetura
+├── 04d-python-no-limite/        # a 04 com o Python otimizado ao máximo, para comparar com a 04c
 ├── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
 ├── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
 ├── 07-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s

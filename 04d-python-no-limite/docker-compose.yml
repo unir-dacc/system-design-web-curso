@@ -1,0 +1,169 @@
+# Etapa 04d - Python no limite: a arquitetura da etapa 04, com o Python otimizado
+#
+# O mesmo hardware e a mesma arquitetura da etapa 04 (Nginx com rate limit, 2
+# backends, cache), sem fila e sem sala de espera, como a 04c em Go. Muda o
+# código: Python 3.14, Granian, uvloop, msgspec, asyncpg, sem framework e sem
+# ORM, compilado com o mypyc.
+#
+# Orçamento do Ingressa: 2 CPUs e 2 GB no total, iguais em todas as etapas.
+# Nesta etapa, eles ficam assim:
+#   nginx:    0.2 CPU  / 128 MB          (igual à etapa 04b: a compra não prende uma thread)
+#   ingressa: 0.65 CPU / 512 MB, cada um (2 backends em Python no limite)
+#   postgres: 0.25 CPU / 640 MB          (igual à etapa 03)
+#   redis:    0.25 CPU / 256 MB          (igual à etapa 02)
+# Os sistemas externos vêm de ../shared/compose.externos.yml e são iguais em todas as etapas.
+
+name: ingressa
+
+include:
+  - ../shared/compose.externos.yml
+
+services:
+  # A porta de entrada: todo acesso passa pelo Nginx, que distribui as
+  # requisições entre os backends e limita quantas ficam em andamento.
+  # Para testar outro limite:
+  #   MAX_COMPRAS_SIMULTANEAS=10 docker compose up -d nginx
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "127.0.0.1:8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+    environment:
+      # Quantas requisições de cada endpoint podem estar em andamento ao mesmo tempo
+      MAX_PROGRAMACAO_SIMULTANEAS: ${MAX_PROGRAMACAO_SIMULTANEAS:-200}
+      MAX_MAPAS_SIMULTANEOS: ${MAX_MAPAS_SIMULTANEOS:-150}
+      MAX_PEDIDOS_SIMULTANEOS: ${MAX_PEDIDOS_SIMULTANEOS:-100}
+      # Assíncrono, como a 04b e a 04c: a compra que espera o gateway não prende
+      # uma thread, e o limite é o mesmo delas (150), e não o da 04 (60)
+      MAX_COMPRAS_SIMULTANEAS: ${MAX_COMPRAS_SIMULTANEAS:-150}
+      MAX_OUTROS_SIMULTANEOS: ${MAX_OUTROS_SIMULTANEOS:-50}
+    ulimits:
+      nofile: 65536
+    depends_on:
+      ingressa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # Os backends: o Ingressa em 2 cópias iguais. Nenhum guarda
+  # estado na própria memória (o cache está no Redis, os pedidos no Postgres),
+  # então qualquer um pode atender qualquer requisição.
+  # Para testar outro número: docker compose up -d --scale ingressa=3
+  ingressa:
+    build: .
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.65"
+          memory: 512M
+    # Limite de arquivos abertos do processo (cada conexão de rede conta como um).
+    # Fixado aqui para que o resultado seja o mesmo em qualquer máquina.
+    ulimits:
+      nofile: 1024
+    # Sem porta publicada: só o Nginx fala com os backends
+    volumes:
+      - ../shared/seed:/seed:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sistema-cinema:
+        condition: service_healthy
+      gateway-pagamento:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    # pg_stat_statements: o Postgres guarda, para cada consulta, quantas vezes
+    # rodou e quanto tempo levou (é o que o pgHero mostra)
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    # A memória compartilhada do container (/dev/shm). O padrão do Docker, 64 MB,
+    # não basta para o VACUUM e as consultas em paralelo do Postgres
+    shm_size: 256mb
+    environment:
+      POSTGRES_USER: ingressa
+      POSTGRES_PASSWORD: ingressa
+      POSTGRES_DB: ingressa
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "ingressa"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 640M
+
+  redis:
+    image: redis:7.4-alpine
+    # Só cache: nada é gravado em disco. Quando a memória enche, descarta as
+    # respostas guardadas há mais tempo sem uso.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # Painel do banco: as consultas que mais gastam tempo, os índices, as tabelas.
+  # Não sobe com "up"; é usado com:
+  #   docker compose --profile observar up -d pghero
+  # e fica em http://localhost:8080. Só lê estatísticas, então fica fora do
+  # orçamento do Ingressa.
+  pghero:
+    image: ankane/pghero:v3.6.1
+    profiles: ["observar"]
+    environment:
+      DATABASE_URL: postgres://ingressa:ingressa@postgres:5432/ingressa
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Gerador de carga. Não sobe com "up"; é usado com:
+  #   docker compose run --rm --service-ports k6 run /scripts/estreia.js
+  # Painel em tempo real: http://localhost:5665 (o --service-ports publica a porta)
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["carga"]
+    # Roda com o seu usuário para conseguir salvar o relatório em ./relatorios
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      - "127.0.0.1:5665:5665"
+    volumes:
+      - ../shared/load-tests:/scripts:ro
+      - ./relatorios:/relatorios
+      # Só leitura: o relatório compara com o último resultado das outras etapas
+      - ..:/curso:ro
+    environment:
+      # O teste entra pela porta da frente, como um usuário
+      BASE_URL: http://nginx:80
+      ETAPA: "Etapa 04d · Python no limite"
+      # Ao final, o painel é salvo em relatorios/ultimo-teste.html
+      K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html
+      K6_WEB_DASHBOARD: "true"
+      K6_WEB_DASHBOARD_HOST: 0.0.0.0
+      K6_WEB_DASHBOARD_PERIOD: 2s
+      # Avisos de requisições que falharam vão para um arquivo, não para a tela
+      K6_LOG_OUTPUT: file=/relatorios/k6.log

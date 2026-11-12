@@ -37,7 +37,7 @@ const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '04b-async', '04c-em-go', '05-fila', '06-sala-de-espera', '07-mais-hardware', '08-go'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '04b-async', '04c-em-go', '04d-python-no-limite', '05-fila', '06-sala-de-espera', '07-mais-hardware', '08-go'];
 // O diagrama da arquitetura desta etapa, para abrir no Excalidraw: "Etapa 04b · Async" fica na pasta 04b-async.
 const CODIGO_DA_ETAPA = (ETAPA.match(/^Etapa (\S+)/) || [])[1];
 const PASTA_DA_ETAPA = PASTAS_DAS_ETAPAS.find((pasta) => pasta.startsWith(`${CODIGO_DA_ETAPA}-`));
@@ -899,7 +899,7 @@ function gerarTexto(r) {
 
   const comparacao = r.comparacao.map(
     (c) =>
-      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 28)}${linha(c.hardware || '2 CPUs / 2 GB', 15)}${col(`${c.picoUsuariosPorSegundo || 120}/s`, 6)}${col(`${c.capacidade}/s`, 9)}${col(pctFracao(c.curiososAtendidos), 11)}` +
+      `    ${c.atual ? '▶' : ' '} ${linha(c.etapa, 31)}${linha(c.hardware || '2 CPUs / 2 GB', 15)}${col(`${c.picoUsuariosPorSegundo || 120}/s`, 6)}${col(`${c.capacidade}/s`, 9)}${col(pctFracao(c.curiososAtendidos), 11)}` +
       `${col(pctFracao(c.compradoresAtendidos), 13)}${col(c.comprasPorSegundoNoPico.toFixed(1), 11)}` +
       `   ${c.travou ? 'travou' : c.caiuNaSubida ? 'caiu, voltou' : 'ficou de pé'}`,
   );
@@ -955,8 +955,8 @@ ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe
 ${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
   3. COMPARAÇÃO COM AS ETAPAS ANTERIORES (último resultado de cada uma)
 
-      etapa                       hardware         pico  aguenta   curiosos  compradores  compras/s   no fim
-                                                                   no pico     no pico     no pico
+      etapa                          hardware         pico  aguenta   curiosos  compradores  compras/s   no fim
+                                                                      no pico     no pico     no pico
 ${comparacao.join('\n')}
 
   Relatório para projetar: relatorios/estreia.html
