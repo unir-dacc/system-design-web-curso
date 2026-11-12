@@ -37,7 +37,7 @@ const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '04b-async', '05-fila', '06-sala-de-espera', '07-mais-hardware', '08-go'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '04b-async', '05-fila', '06-sala-de-espera', '06b-04-em-go', '07-mais-hardware', '08-go'];
 // O diagrama da arquitetura desta etapa, para abrir no Excalidraw: "Etapa 04b · Async" fica na pasta 04b-async.
 const CODIGO_DA_ETAPA = (ETAPA.match(/^Etapa (\S+)/) || [])[1];
 const PASTA_DA_ETAPA = PASTAS_DAS_ETAPAS.find((pasta) => pasta.startsWith(`${CODIGO_DA_ETAPA}-`));
