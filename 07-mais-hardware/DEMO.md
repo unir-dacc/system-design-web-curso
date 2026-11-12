@@ -13,6 +13,10 @@
 
 A arquitetura é a mesma da etapa 06. Mudam o hardware (8 CPUs e 8 GB, em vez de 2 CPUs e 2 GB) e o tamanho da estreia no teste.
 
+O diagrama desta etapa está em `arquitetura.excalidraw`, nesta pasta: abra em https://excalidraw.com
+(menu ☰ → Abrir, ou arraste o arquivo para a página) ou com a extensão Excalidraw do VS Code, e desenhe
+por cima durante a aula. A peça nova da etapa está em amarelo.
+
 ## 0. Preparação (antes da aula)
 
 Todos os comandos são rodados **dentro desta pasta** (`07-mais-hardware/`).

@@ -81,6 +81,13 @@ git diff --no-index <etapa-anterior> <etapa-seguinte>
 
 Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 
+## Os diagramas
+
+Cada etapa tem o desenho da sua arquitetura em `arquitetura.excalidraw`: o público, as peças do
+Ingressa com a CPU e a memória de cada uma, e os sistemas externos. A peça nova de cada etapa
+está em amarelo. Para abrir e desenhar por cima, use https://excalidraw.com (arraste o arquivo para
+a página) ou a extensão **Excalidraw** do VS Code, que abre o arquivo direto do repositório.
+
 ## Estrutura
 
 ```
@@ -94,6 +101,7 @@ system-design-web-curso/
 ├── 01-monolito/                 # cada etapa é completa e roda sozinha
 │   ├── app/
 │   ├── docker-compose.yml
+│   ├── arquitetura.excalidraw   # o diagrama da etapa (abra no Excalidraw)
 │   └── DEMO.md
 ├── 02-cache/                    # cache das respostas iguais para todos (Redis)
 ├── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)

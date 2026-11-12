@@ -17,6 +17,10 @@
 
 O hardware e a divisão são os mesmos da etapa 03. O que muda é só a configuração do Nginx.
 
+O diagrama desta etapa está em `arquitetura.excalidraw`, nesta pasta: abra em https://excalidraw.com
+(menu ☰ → Abrir, ou arraste o arquivo para a página) ou com a extensão Excalidraw do VS Code, e desenhe
+por cima durante a aula. A peça nova da etapa está em amarelo.
+
 ## 0. Preparação (antes da aula)
 
 Todos os comandos são rodados **dentro desta pasta** (`04-rate-limit/`).

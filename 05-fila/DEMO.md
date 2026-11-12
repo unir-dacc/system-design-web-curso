@@ -23,6 +23,10 @@
 
 O orçamento é o mesmo: 2 CPUs e 2 GB. O worker não ganhou hardware novo: os backends cederam uma parte do deles.
 
+O diagrama desta etapa está em `arquitetura.excalidraw`, nesta pasta: abra em https://excalidraw.com
+(menu ☰ → Abrir, ou arraste o arquivo para a página) ou com a extensão Excalidraw do VS Code, e desenhe
+por cima durante a aula. A peça nova da etapa está em amarelo.
+
 ## 0. Preparação (antes da aula)
 
 Todos os comandos são rodados **dentro desta pasta** (`05-fila/`).
