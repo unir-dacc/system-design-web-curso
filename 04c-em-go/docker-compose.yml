@@ -1,4 +1,4 @@
-# Etapa 06b - A 04 em Go: a arquitetura da etapa 04, com o Ingressa em Go
+# Etapa 04c - A 04 em Go: a arquitetura da etapa 04, com o Ingressa em Go
 #
 # O mesmo hardware e a mesma arquitetura da etapa 04 (Nginx com rate limit, 2
 # backends, cache), sem fila e sem sala de espera. Muda só a linguagem: o
@@ -158,7 +158,7 @@ services:
     environment:
       # O teste entra pela porta da frente, como um usuário
       BASE_URL: http://nginx:80
-      ETAPA: "Etapa 06b · A 04 em Go"
+      ETAPA: "Etapa 04c · A 04 em Go"
       # Ao final, o painel é salvo em relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD: "true"

@@ -1,4 +1,4 @@
-# Aula 06b: A 04 em Go, a linguagem contra a arquitetura
+# Aula 04c: A 04 em Go, a linguagem contra a arquitetura
 
 > **Objetivo:** responder com medição a pergunta *"e se, em vez de fila e sala
 > de espera, eu reescrevesse tudo numa linguagem mais rápida?"*. A arquitetura
@@ -18,19 +18,19 @@
 
 O hardware e a divisão são os mesmos da etapa 04 (2 CPUs e 2 GB). O limite das compras no Nginx é o da 04b: em Go, uma compra esperando o gateway não prende uma thread.
 
-**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/06b-04-em-go/arquitetura.excalidraw)**,
+**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04c-em-go/arquitetura.excalidraw)**,
 para desenhar por cima durante a aula. A peça nova da etapa está em amarelo.
 
 ## 0. Preparação (antes da aula)
 
-Todos os comandos são rodados **dentro desta pasta** (`06b-04-em-go/`).
+Todos os comandos são rodados **dentro desta pasta** (`04c-em-go/`).
 
 ```bash
 docker compose -f ../06-sala-de-espera/docker-compose.yml down -v   # as etapas usam os mesmos nomes
 docker compose up -d --build --wait
 ```
 
-Rode a estreia das etapas 04 e 06 antes da aula: o relatório desta etapa compara com o último resultado delas.
+Rode a estreia das etapas 04 e 06 antes da aula: o relatório desta etapa compara com o último resultado da 04, e a 06 fica aberta ao lado.
 
 ---
 
