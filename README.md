@@ -83,10 +83,21 @@ Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
 
 ## Os diagramas
 
-Cada etapa tem o desenho da sua arquitetura em `arquitetura.excalidraw`: o público, as peças do
-Ingressa com a CPU e a memória de cada uma, e os sistemas externos. A peça nova de cada etapa
-está em amarelo. Para abrir e desenhar por cima, use https://excalidraw.com (arraste o arquivo para
-a página) ou a extensão **Excalidraw** do VS Code, que abre o arquivo direto do repositório.
+Cada etapa tem o desenho da sua arquitetura: o público, as peças do Ingressa com a CPU e a memória
+de cada uma, e os sistemas externos. A peça nova de cada etapa está em amarelo. O link abre o
+desenho no Excalidraw, para desenhar por cima durante a aula (o `DEMO.md` de cada etapa também tem
+o link).
+
+| Etapa | Diagrama |
+|-------|----------|
+| `01-monolito` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/01-monolito/arquitetura.excalidraw) |
+| `02-cache` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/02-cache/arquitetura.excalidraw) |
+| `03-nginx` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/03-nginx/arquitetura.excalidraw) |
+| `04-rate-limit` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04-rate-limit/arquitetura.excalidraw) |
+| `05-fila` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/05-fila/arquitetura.excalidraw) |
+| `06-sala-de-espera` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/06-sala-de-espera/arquitetura.excalidraw) |
+| `07-mais-hardware` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-mais-hardware/arquitetura.excalidraw) |
+| `08-go` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-go/arquitetura.excalidraw) |
 
 ## Estrutura
 

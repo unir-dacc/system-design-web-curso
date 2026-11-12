@@ -12,9 +12,8 @@
 
 O Nginx, o Postgres, o Redis, os sistemas externos, o hardware (8 CPUs e 8 GB) e a estreia (600 usuários por segundo) são exatamente os da 07.
 
-O diagrama desta etapa está em `arquitetura.excalidraw`, nesta pasta: abra em https://excalidraw.com
-(menu ☰ → Abrir, ou arraste o arquivo para a página) ou com a extensão Excalidraw do VS Code, e desenhe
-por cima durante a aula. A peça nova da etapa está em amarelo.
+**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-go/arquitetura.excalidraw)**,
+para desenhar por cima durante a aula. A peça nova da etapa está em amarelo.
 
 ## 0. Preparação (antes da aula)
 

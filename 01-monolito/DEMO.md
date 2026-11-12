@@ -15,9 +15,8 @@
                    └───────────┘                └───────────────────────┘
 ```
 
-O diagrama desta etapa está em `arquitetura.excalidraw`, nesta pasta: abra em https://excalidraw.com
-(menu ☰ → Abrir, ou arraste o arquivo para a página) ou com a extensão Excalidraw do VS Code, e desenhe
-por cima durante a aula. A peça nova da etapa está em amarelo.
+**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/01-monolito/arquitetura.excalidraw)**,
+para desenhar por cima durante a aula. A peça nova da etapa está em amarelo.
 
 ## 0. Preparação (antes da aula)
 
