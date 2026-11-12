@@ -6,7 +6,7 @@
 //      Em cada degrau conferimos se o site continua viável. É assim que
 //      descobrimos até quantos usuários o Ingressa aguenta.
 //
-//   2. O PICO: as vendas abrem e, por 1 minuto, chegam ao mesmo tempo:
+//   2. O PICO: as vendas abrem e, por 30 segundos, chegam ao mesmo tempo:
 //      - usuários: abrem a programação, escolhem uma sessão e olham o mapa.
 //        Como numa loja de verdade, a maioria só olha: de cada 10, 7 dão uma
 //        olhada em outra sessão e vão embora, e 3 compram de 1 a 4 ingressos
@@ -52,18 +52,20 @@ const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
 const USUARIOS_NO_PICO = Number(__ENV.USUARIOS || 120);
 
 // A subida: cada degrau tem ~1,5× o anterior, sempre abaixo do pico. Com degraus
-// que dobram, um ganho menor que 2× não apareceria na capacidade.
-const DEGRAUS = (__ENV.DEGRAUS || '1,2,4,8,12,16,24,32,48,64,96,128,192,256')
+// que dobram, um ganho menor que 2× não apareceria na capacidade. Começa em 4
+// usuários por segundo (todas as etapas aguentam isso), para cada degrau de 10 s
+// ter pelo menos 40 usuários: com poucos, os "95% em até" seriam só o pior caso.
+const DEGRAUS = (__ENV.DEGRAUS || '4,8,12,16,24,32,48,64,96,128,192,256,384')
   .split(',')
   .map(Number)
   .filter((d) => d < USUARIOS_NO_PICO);
 if (DEGRAUS.length === 0) throw new Error('O pico precisa de pelo menos 2 usuários por segundo (-e USUARIOS=2)');
-const DURACAO_DEGRAU_S = 15;
+const DURACAO_DEGRAU_S = 10;
 const SUBIDA_S = DEGRAUS.length * DURACAO_DEGRAU_S;
 
 const ENGAJADOS_POR_SEGUNDO = Math.max(1, Math.round(USUARIOS_NO_PICO / 10));
 const ROBOS_CAMBISTAS = 20;
-const PICO_S = 60;
+const PICO_S = 30;
 
 // O público: de cada 10 usuários, 3 compram e 7 só olham
 const FRACAO_QUE_COMPRA = 0.3;
@@ -168,7 +170,7 @@ function chegada(funcao, stages, vus, extras = {}) {
     preAllocatedVUs: vus,
     maxVUs: vus,
     stages,
-    gracefulStop: '4m', // quem chegou no fim também tem tempo de terminar (inclusive na sala de espera)
+    gracefulStop: '2m', // quem chegou no fim também tem tempo de terminar (inclusive na sala de espera)
     ...extras,
   };
 }
@@ -194,8 +196,8 @@ export const options = {
     pico: chegada(
       'usuario',
       [
-        { duration: '10s', target: USUARIOS_NO_PICO }, // as vendas abrem
-        { duration: `${PICO_S - 10}s`, target: USUARIOS_NO_PICO },
+        { duration: '5s', target: USUARIOS_NO_PICO }, // as vendas abrem
+        { duration: `${PICO_S - 5}s`, target: USUARIOS_NO_PICO },
       ],
       USUARIOS_NO_PICO * PICO_S,
       { startTime: inicioDoPico },
@@ -203,8 +205,8 @@ export const options = {
     engajados: chegada(
       'engajado',
       [
-        { duration: '10s', target: ENGAJADOS_POR_SEGUNDO },
-        { duration: `${PICO_S - 10}s`, target: ENGAJADOS_POR_SEGUNDO },
+        { duration: '5s', target: ENGAJADOS_POR_SEGUNDO },
+        { duration: `${PICO_S - 5}s`, target: ENGAJADOS_POR_SEGUNDO },
       ],
       ENGAJADOS_POR_SEGUNDO * PICO_S,
       { startTime: inicioDoPico },
@@ -290,9 +292,19 @@ export const options = {
       PARTES.flatMap((parte) => Object.keys(ENDPOINTS).map((endpoint) => `tempo_por_endpoint{endpoint:${endpoint},parte:${parte}}`)),
       'max>=0',
     ),
+    // E em cada degrau da subida (o relatório mostra o último degrau viável)
+    ...guardar(
+      DEGRAUS.flatMap((d) =>
+        Object.keys(ENDPOINTS).flatMap((endpoint) => RESULTADOS.map((resultado) => `requisicoes_por_endpoint{degrau:${d},endpoint:${endpoint},resultado:${resultado}}`)),
+      ),
+    ),
+    ...guardar(
+      DEGRAUS.flatMap((d) => Object.keys(ENDPOINTS).map((endpoint) => `tempo_por_endpoint{degrau:${d},endpoint:${endpoint}}`)),
+      'max>=0',
+    ),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
-  teardownTimeout: '240s', // espera a fila de compras esvaziar
+  teardownTimeout: '300s', // espera a fila de compras esvaziar e o Ingressa voltar
 };
 
 // --- Ações de um usuário ---
@@ -335,11 +347,14 @@ function pensar([minimo, maximo]) {
 // Conta uma requisição no seu endpoint. No pico entra todo mundo (usuários,
 // engajados e robôs); um 429 é contado à parte e não entra no tempo, para uma
 // recusa instantânea não parecer "rápida".
-function medirEndpoint(endpoint, r) {
+// Na subida, cada requisição conta no degrau em que o usuário chegou (o mesmo
+// critério dos degraus viáveis).
+function medirEndpoint(endpoint, r, tags = {}) {
   const parte = exec.scenario.name === 'subida' ? 'subida' : 'pico';
   const resultado = r.status === 429 ? 'barrada' : r.status === 0 || r.status >= 500 ? 'erro' : 'ok';
-  requisicoesPorEndpoint.add(1, { endpoint, parte, resultado });
-  if (resultado === 'ok') tempoPorEndpoint.add(r.timings.duration, { endpoint, parte });
+  const onde = parte === 'subida' && tags.degrau ? { endpoint, parte, degrau: tags.degrau } : { endpoint, parte };
+  requisicoesPorEndpoint.add(1, { ...onde, resultado });
+  if (resultado === 'ok') tempoPorEndpoint.add(r.timings.duration, onde);
 }
 
 // O passe da sala de espera deste usuário virtual (nas etapas que têm sala)
@@ -356,7 +371,7 @@ function passarPelaSala(paciencia, tags = {}) {
   let senha = null;
   for (;;) {
     const r = senha === null ? http.post(`${INGRESSA}/sala`, null, params) : http.get(`${INGRESSA}/sala/${senha}`, params);
-    medirEndpoint('sala', r);
+    medirEndpoint('sala', r, tags);
     if (r.status === 200) {
       senha = r.json('senha');
       if (r.json('liberado')) {
@@ -382,7 +397,7 @@ function passarPelaSala(paciencia, tags = {}) {
 // null se a página não abriu.
 function abrirPagina(requisicoes, tags) {
   const respostas = http.batch(requisicoes);
-  respostas.forEach((r, i) => medirEndpoint(requisicoes[i][3].tags.endpoint, r));
+  respostas.forEach((r, i) => medirEndpoint(requisicoes[i][3].tags.endpoint, r, tags));
   const status = respostas.map((r) => r.status);
   if (status.includes(429)) barradosNaPorta.add(1, tags);
   else tempoDaPagina.add(Math.max(...respostas.map((r) => r.timings.duration)), tags);
@@ -417,7 +432,7 @@ function comprar(sessao, cpf, itens, cartao, tags = {}) {
     timeout: ESPERA_DA_COMPRA,
     tags: { name: 'compra', endpoint: 'compra', ...tags },
   });
-  medirEndpoint('compra', r);
+  medirEndpoint('compra', r, tags);
   // Nas etapas com fila, 202 = compra aceita, com os assentos reservados: o
   // usuário vai embora, e o resultado chega por e-mail
   const status = r.status === 202 ? 201 : r.status;
@@ -568,8 +583,14 @@ export function teardown() {
   // Quem sabe quantos assentos foram vendidos é o cinema
   if (estado) vendidos.add(SESSOES.reduce((total, s) => total + estado.sessoes[s].vendido, 0));
 
-  // O Ingressa ainda responde depois que o público foi embora?
-  if (http.get(`${INGRESSA}/health`, { timeout: '10s' }).status !== 200) naoRespondeu.add(1);
+  // O Ingressa ainda responde depois que o público foi embora? Ele tem até 1
+  // minuto para terminar o que ficou preso: travou é não voltar mais.
+  let voltou = false;
+  for (let i = 0; i < 12 && !voltou; i++) {
+    voltou = http.get(`${INGRESSA}/health`, { timeout: '5s' }).status === 200;
+    if (!voltou) sleep(5);
+  }
+  if (!voltou) naoRespondeu.add(1);
 }
 
 // --- Resultado ---
@@ -651,13 +672,15 @@ function calcularResultado(data) {
     };
   };
 
-  // Velocidade por endpoint em cada parte (só aparecem os endpoints que foram chamados)
-  const porEndpoint = (parte, duracaoS) =>
+  // Velocidade por endpoint (só aparecem os endpoints que foram chamados): no
+  // pico, e no último degrau viável da subida. Os degraus em que o Ingressa já
+  // tinha caído fariam qualquer endpoint parecer lento.
+  const porEndpoint = (filtro, duracaoS) =>
     Object.entries(ENDPOINTS)
       .map(([endpoint, nome]) => {
-        const conta = (resultado) => n(`requisicoes_por_endpoint{endpoint:${endpoint},parte:${parte},resultado:${resultado}}`);
+        const conta = (resultado) => n(`requisicoes_por_endpoint{${filtro(endpoint)},resultado:${resultado}}`);
         const total = conta('ok') + conta('erro') + conta('barrada');
-        const tempo = v(`tempo_por_endpoint{endpoint:${endpoint},parte:${parte}}`);
+        const tempo = v(`tempo_por_endpoint{${filtro(endpoint)}}`);
         return {
           nome,
           porSegundo: total / duracaoS,
@@ -741,7 +764,10 @@ function calcularResultado(data) {
       tentativas: n('engajados_tentativas'),
       tempo: { mediana: v('engajados_tempo_ate_comprar').med, pior: v('engajados_tempo_ate_comprar').max },
     },
-    endpoints: { subida: porEndpoint('subida', SUBIDA_S), pico: porEndpoint('pico', PICO_S) },
+    endpoints: {
+      capacidade: capacidade ? porEndpoint((endpoint) => `degrau:${capacidade.usuariosPorSegundo},endpoint:${endpoint}`, DURACAO_DEGRAU_S) : [],
+      pico: porEndpoint((endpoint) => `endpoint:${endpoint},parte:pico`, PICO_S),
+    },
     progressao,
     // Nas etapas com sala de espera (null nas outras)
     sala: temSala ? { espera: espera('tempo_na_sala{scenario:pico}'), metaMs: META_SALA_MS } : null,
@@ -860,10 +886,9 @@ ${degraus.join('\n')}
     ${linha('', 14)}${col('comprar/s', 10)}${col('/s', 11)}${col('que compraram', 15)}${col('que viram tudo', 16)}
 ${progressao.join('\n')}
 
-    Velocidade por endpoint (a subida inteira)
-${tabelaDeEndpoints(r.endpoints.subida)}
+${s.capacidade ? `    Velocidade por endpoint com ${s.capacidade.usuariosPorSegundo} usuários/s, o último degrau viável\n${tabelaDeEndpoints(r.endpoints.capacidade)}` : '    Nenhum degrau foi viável.'}
 
-  2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por 1 minuto
+  2. O PICO: ${p.usuariosPorSegundo} usuários/s + ${p.engajadosPorSegundo} engajados/s + ${p.robos} robôs, por ${p.duracaoS} s
 
     Quem só queria olhar (curiosos) ......... ${pct(cu.soOlharam, cu.chegaram)} conseguiu ver tudo
       Chegaram ${cu.chegaram} · viram a programação ${cu.viramProgramacao} · viram o mapa ${cu.viramMapa} · viram tudo ${cu.soOlharam} · desistiram ${cu.desistiram}

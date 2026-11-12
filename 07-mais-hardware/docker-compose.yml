@@ -115,8 +115,13 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    # 6 backends com 40 conexões cada, mais o worker: o padrão (100) não basta
-    command: ["postgres", "-c", "max_connections=300"]
+    # 6 backends com 40 conexões cada, mais o worker: o padrão (100) não basta.
+    # pg_stat_statements: o Postgres guarda, para cada consulta, quantas vezes
+    # rodou e quanto tempo levou (é o que o pgHero mostra)
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_preload_libraries=pg_stat_statements"]
+    # A memória compartilhada do container (/dev/shm). O padrão do Docker, 64 MB,
+    # não basta para o VACUUM e as consultas em paralelo do Postgres
+    shm_size: 256mb
     environment:
       POSTGRES_USER: ingressa
       POSTGRES_PASSWORD: ingressa
@@ -152,6 +157,22 @@ services:
           cpus: "0.5"
           memory: 512M
 
+  # Painel do banco: as consultas que mais gastam tempo, os índices, as tabelas.
+  # Não sobe com "up"; é usado com:
+  #   docker compose --profile observar up -d pghero
+  # e fica em http://localhost:8080. Só lê estatísticas, então fica fora do
+  # orçamento do Ingressa.
+  pghero:
+    image: ankane/pghero:v3.6.1
+    profiles: ["observar"]
+    environment:
+      DATABASE_URL: postgres://ingressa:ingressa@postgres:5432/ingressa
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # Gerador de carga. Não sobe com "up"; é usado com:
   #   docker compose run --rm --service-ports k6 run /scripts/estreia.js
   # Painel em tempo real: http://localhost:5665 (o --service-ports publica a porta)
@@ -173,7 +194,7 @@ services:
       ETAPA: "Etapa 07 · Mais hardware"
       # O grande final: uma estreia maior, e o hardware que a 07 tem
       USUARIOS: 600
-      DEGRAUS: "1,2,4,8,16,32,64,128,192,256,384"
+      DEGRAUS: "4,8,16,32,64,128,192,256,384"
       HARDWARE: "8 CPUs / 8 GB"
       # Ao final, o painel é salvo em relatorios/ultimo-teste.html
       K6_WEB_DASHBOARD_EXPORT: /relatorios/ultimo-teste.html

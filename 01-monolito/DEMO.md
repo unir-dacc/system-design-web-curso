@@ -98,7 +98,7 @@ Pergunta: *"de todo esse tempo, quanto o Ingressa passou trabalhando de verdade?
 
 A rodada tem duas partes e leva alguns minutos:
 
-1. **A subida:** o público cresce aos poucos (1 usuário por segundo, 2, 4, 8, 12...). Em cada degrau, o teste confere se o site continua viável.
+1. **A subida:** o público cresce aos poucos (4 usuários por segundo, 8, 12, 16...). Em cada degrau, o teste confere se o site continua viável.
 2. **O pico:** as vendas abrem de vez, com usuários, usuários muito engajados e robôs cambistas ao mesmo tempo.
 
 Num terminal deixe `docker compose stats`, no outro rode o teste e abra o painel em http://localhost:5665:
@@ -176,6 +176,25 @@ Pergunta: *"um sistema que não é nosso pode derrubar o nosso?"*
 Abra `cobrar` em `app/clients.py`.
 
 Pergunta: *"se o gateway não respondeu, o cliente foi cobrado ou não? Por que não dá para simplesmente liberar o assento?"*
+
+## Onde o banco gastou o tempo
+
+Suba o painel do banco, o pgHero, e abra http://localhost:8080:
+
+```bash
+docker compose --profile observar up -d pghero
+```
+
+Depois de um teste, a aba **Queries** lista as consultas da rodada pelo tempo total que elas
+tomaram do banco (as estatísticas são zeradas no começo de cada teste). O mesmo, no terminal:
+
+```bash
+docker compose exec postgres psql -U ingressa -c "SELECT calls AS vezes, round(mean_exec_time::numeric, 1) AS media_ms,
+  round((100 * total_exec_time / sum(total_exec_time) OVER ())::numeric, 1) AS pct_do_tempo, left(query, 60) AS consulta
+  FROM pg_stat_statements WHERE query NOT ILIKE '%pg_stat%' ORDER BY total_exec_time DESC LIMIT 5"
+```
+
+Pergunta: *"qual consulta tomou mais tempo do banco? Ela é lenta, ou roda muitas vezes?"*
 
 ---
 

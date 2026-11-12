@@ -73,6 +73,25 @@ Pergunta: *"quantas CPUs um processo Python da 01 consegue usar? E quantas threa
 
 Pergunta: *"qual das etapas daria para fazer de graça, sem pagar por mais nenhuma máquina? E qual só fez sentido com hardware?"*
 
+## Onde o banco gastou o tempo
+
+Suba o painel do banco, o pgHero, e abra http://localhost:8080:
+
+```bash
+docker compose --profile observar up -d pghero
+```
+
+Depois de um teste, a aba **Queries** lista as consultas da rodada pelo tempo total que elas
+tomaram do banco (as estatísticas são zeradas no começo de cada teste). O mesmo, no terminal:
+
+```bash
+docker compose exec postgres psql -U ingressa -c "SELECT calls AS vezes, round(mean_exec_time::numeric, 1) AS media_ms,
+  round((100 * total_exec_time / sum(total_exec_time) OVER ())::numeric, 1) AS pct_do_tempo, left(query, 60) AS consulta
+  FROM pg_stat_statements WHERE query NOT ILIKE '%pg_stat%' ORDER BY total_exec_time DESC LIMIT 5"
+```
+
+Pergunta: *"qual consulta tomou mais tempo do banco? Ela é lenta, ou roda muitas vezes?"*
+
 ---
 
 ## Para fechar o curso

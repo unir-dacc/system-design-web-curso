@@ -81,6 +81,12 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    # pg_stat_statements: o Postgres guarda, para cada consulta, quantas vezes
+    # rodou e quanto tempo levou (é o que o pgHero mostra)
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    # A memória compartilhada do container (/dev/shm). O padrão do Docker, 64 MB,
+    # não basta para o VACUUM e as consultas em paralelo do Postgres
+    shm_size: 256mb
     environment:
       POSTGRES_USER: ingressa
       POSTGRES_PASSWORD: ingressa
@@ -111,6 +117,22 @@ services:
         limits:
           cpus: "0.25"
           memory: 256M
+
+  # Painel do banco: as consultas que mais gastam tempo, os índices, as tabelas.
+  # Não sobe com "up"; é usado com:
+  #   docker compose --profile observar up -d pghero
+  # e fica em http://localhost:8080. Só lê estatísticas, então fica fora do
+  # orçamento do Ingressa.
+  pghero:
+    image: ankane/pghero:v3.6.1
+    profiles: ["observar"]
+    environment:
+      DATABASE_URL: postgres://ingressa:ingressa@postgres:5432/ingressa
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # Gerador de carga. Não sobe com "up"; é usado com:
   #   docker compose run --rm --service-ports k6 run /scripts/estreia.js

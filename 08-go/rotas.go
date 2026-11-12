@@ -398,6 +398,16 @@ func reset(w http.ResponseWriter, r *http.Request) {
 		responderErro(w, err)
 		return
 	}
+	// Zera as estatísticas de cada consulta (pg_stat_statements): depois do
+	// teste, o pgHero mostra só a rodada
+	if _, err := db.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"); err != nil {
+		responderErro(w, err)
+		return
+	}
+	if _, err := db.Exec(ctx, "SELECT pg_stat_statements_reset()"); err != nil {
+		responderErro(w, err)
+		return
+	}
 	if err := rdb.FlushDB(ctx).Err(); err != nil {
 		responderErro(w, err)
 		return

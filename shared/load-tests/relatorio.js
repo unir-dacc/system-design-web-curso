@@ -337,7 +337,7 @@ export function gerarHtml(r) {
   <h1>Estreia do maior filme da história</h1>
   <p>Como numa loja de verdade, a maioria só olha: de cada 10 usuários, 7 são curiosos (olham a programação e o mapa e vão embora) e 3 compram.
   Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
-  ${usuarios(p.usuariosPorSegundo)} por segundo, ${usuarios(p.engajadosPorSegundo)} muito engajados por segundo e ${p.robos} robôs cambistas, durante 1 minuto.</p>
+  ${usuarios(p.usuariosPorSegundo)} por segundo, ${usuarios(p.engajadosPorSegundo)} muito engajados por segundo e ${p.robos} robôs cambistas, durante ${p.duracaoS} segundos.</p>
 </div></header>
 <main>
   <section class="veredito tripla">
@@ -373,9 +373,9 @@ export function gerarHtml(r) {
   <p class="detalhe" style="margin:-6px 0 14px">A chegada de usuários sobe em degraus de ${s.duracaoDegrauS} s. Um degrau é viável quando 95% das páginas (programação e mapa) abrem em até ${tempo(r.metas.paginaMs)}, 95% compram em até ${tempo(r.metas.compraMs)}, e menos de ${decimal(r.metas.erros * 100)}% das requisições dão erro ou são barradas no limite.</p>
   <div class="bloco">${tabelaDeDegraus(s, r.metas, r.sala)}</div>
 
-  <h2>1 · A subida: a velocidade de cada endpoint</h2>
-  <p class="detalhe" style="margin:-6px 0 14px">A subida inteira, todos os degraus juntos. O tempo é só de quem foi atendido: quem foi barrado na porta aparece à parte.</p>
-  <div class="bloco">${tabelaDeEndpoints(r.endpoints.subida)}</div>
+  <h2>1 · A subida: a velocidade de cada endpoint ${s.capacidade ? `com ${inteiro(s.capacidade.usuariosPorSegundo)} usuários/s, o último degrau viável` : ''}</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">O tempo é só de quem foi atendido: quem foi barrado na porta aparece à parte.</p>
+  ${s.capacidade ? `<div class="bloco">${tabelaDeEndpoints(r.endpoints.capacidade)}</div>` : '<p class="detalhe">Nenhum degrau foi viável.</p>'}
 
   <h2>2 · O pico: cada público conseguiu o que queria?</h2>
   <div class="publicos">

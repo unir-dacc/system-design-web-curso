@@ -39,6 +39,7 @@ docker compose run --rm --service-ports k6 run -e USUARIOS=200 /scripts/estreia.
 docker compose stats                                      # CPU/memória em tempo real
 docker compose logs -f ingressa                           # logs do app
 docker compose exec postgres psql -U ingressa             # banco
+docker compose --profile observar up -d pghero            # painel do banco em http://localhost:8080
 docker compose down -v                                    # derruba e apaga os dados
 ```
 
@@ -52,9 +53,9 @@ O público é como o de uma loja de verdade: todo usuário abre a programação 
 uma sessão, mas **a maioria só olha**. De cada 10, 7 dão uma olhada em outra sessão e vão
 embora, e 3 compram. Uma rodada, duas partes:
 
-1. **A subida:** o público cresce em degraus de ~1,5× (1 usuário por segundo, 2, 4, 8, 12, 16, 24...
+1. **A subida:** o público cresce em degraus de 10 s, de ~1,5× cada (4 usuários por segundo, 8, 12, 16, 24...
    até o maior degrau abaixo do pico). Em cada degrau o teste confere se o site continua viável e descobre **até quantos usuários o Ingressa aguenta**.
-2. **O pico:** por 1 minuto chegam 120 usuários por segundo (desistem se o site não carregar
+2. **O pico:** por 30 segundos chegam 120 usuários por segundo (desistem se o site não carregar
    em 60 s; depois de clicar em comprar, esperam a resposta), 12 usuários muito engajados por
    segundo (nunca desistem e tentam de novo até conseguir) e robôs cambistas tentando
    furar o limite de ingressos por CPF.
@@ -163,3 +164,4 @@ Cartões de teste: `tok_aprovado` (sempre aprova), `tok_recusado` (sempre recusa
 | Sistema do cinema | http://localhost:8002/docs |
 | E-mails (Mailpit) | http://localhost:8025 |
 | Painel do k6 (durante um teste) | http://localhost:5665 |
+| Painel do banco (pgHero, opcional) | http://localhost:8080 |

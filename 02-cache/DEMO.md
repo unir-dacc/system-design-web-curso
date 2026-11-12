@@ -117,6 +117,25 @@ MAPA_TTL_S=5 docker compose up -d ingressa     # volta ao padrão
 
 Pergunta: *"se o mapa é apagado a cada compra, para que serve a validade? E se ela fosse de 1 hora?"*
 
+## Onde o banco gastou o tempo
+
+Suba o painel do banco, o pgHero, e abra http://localhost:8080:
+
+```bash
+docker compose --profile observar up -d pghero
+```
+
+Depois de um teste, a aba **Queries** lista as consultas da rodada pelo tempo total que elas
+tomaram do banco (as estatísticas são zeradas no começo de cada teste). O mesmo, no terminal:
+
+```bash
+docker compose exec postgres psql -U ingressa -c "SELECT calls AS vezes, round(mean_exec_time::numeric, 1) AS media_ms,
+  round((100 * total_exec_time / sum(total_exec_time) OVER ())::numeric, 1) AS pct_do_tempo, left(query, 60) AS consulta
+  FROM pg_stat_statements WHERE query NOT ILIKE '%pg_stat%' ORDER BY total_exec_time DESC LIMIT 5"
+```
+
+Pergunta: *"qual consulta tomou mais tempo do banco? Ela é lenta, ou roda muitas vezes?"*
+
 ---
 
 ## Para fechar a aula
