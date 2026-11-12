@@ -33,7 +33,7 @@ app = FastAPI(title="Gateway de Pagamento (simulado)")
 
 
 class Config(BaseModel):
-    latencia_ms: int = int(os.getenv("LATENCIA_MS", "1200"))
+    latencia_ms: int = int(os.getenv("LATENCIA_MS", "3000"))
     variacao_pct: int = int(os.getenv("VARIACAO_PCT", "30"))
     taxa_recusa: float = float(os.getenv("TAXA_RECUSA", "0.05"))
     taxa_erro: float = float(os.getenv("TAXA_ERRO", "0"))

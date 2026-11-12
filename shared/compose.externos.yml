@@ -12,8 +12,9 @@ services:
     ports:
       - "127.0.0.1:8001:8000"
     environment:
-      # Lento: cada cobrança leva ~1,2 s (análise antifraude, bandeira do cartão...)
-      LATENCIA_MS: 1200
+      # Lento: cada cobrança leva ~3 s (análise antifraude, bandeira do cartão...),
+      # como um gateway sob a carga de uma grande estreia
+      LATENCIA_MS: 3000
       TAXA_RECUSA: 0.05
     deploy:
       resources:

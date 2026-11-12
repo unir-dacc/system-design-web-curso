@@ -125,7 +125,7 @@ watch -n1 docker compose exec redis redis-cli llen fila:compras
 | A progressão das vendas | As vendas acompanham a procura até onde? E depois? |
 | O ganho de cada etapa | O que mudou em relação à 04? |
 | A velocidade de cada endpoint | Como ficou o `POST /pedidos`? |
-| O pico: o sistema | Até quanto a fila de compras cresceu? Quanto tempo depois do pico ela esvaziou? |
+| O pico: o sistema | Até quanto a fila de compras cresceu? Quantas compras ainda faltavam no fim, e em quanto tempo o worker termina? |
 
 👉 **Observe também:** no `docker compose stats`, a CPU dos backends e do worker. Quem está no limite agora?
 

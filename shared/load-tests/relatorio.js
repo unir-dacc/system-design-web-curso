@@ -34,6 +34,14 @@ function alertas(r) {
   return lista.map((texto) => `<div class="alerta">⚠️ ${texto}</div>`).join('');
 }
 
+// No fim do teste, a fila ainda tinha N compras: o worker conclui R por segundo,
+// e ela esvazia em T segundos (o teste não espera o worker terminar)
+export function descreverFila(fila) {
+  if (!fila.noFim) return 'a fila já estava vazia';
+  if (!fila.ritmo) return `${fila.noFim} compras ainda na fila, e o worker não concluiu nenhuma em ${fila.amostraS} s`;
+  return `${fila.noFim} compras ainda na fila; o worker conclui ~${fila.ritmo.toFixed(1).replace('.', ',')} por segundo: esvazia em ~${Math.round(fila.esvaziaEmS)} s`;
+}
+
 function cartao(titulo, valor, detalhe, barra) {
   const progresso = barra === undefined ? '' : `<div class="trilho"><div class="cheio" style="width:${barra}%"></div></div>`;
   return `<div class="cartao"><div class="rotulo">${titulo}</div><div class="valor">${valor}</div>${progresso}<div class="detalhe">${detalhe}</div></div>`;
@@ -186,6 +194,8 @@ const ESTILO = `
   .selo { color: var(--ouro); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; }
   h1 { font-size: clamp(28px, 5vw, 46px); line-height: 1.1; margin: 10px 0 8px; }
   header p { margin: 0; color: #a8a29e; }
+  header a.diagrama { display: inline-block; margin-top: 16px; color: var(--ouro); font-weight: 600; text-decoration: none; border: 1px solid var(--ouro); border-radius: 999px; padding: 6px 14px; }
+  header a.diagrama:hover { background: var(--ouro); color: #0c0a09; }
   .veredito { background: var(--papel); border-radius: 16px; margin-top: -24px; padding: 28px; box-shadow: 0 8px 30px rgb(0 0 0 / .06); }
   .veredito .grande { font-size: clamp(40px, 8vw, 72px); font-weight: 800; line-height: 1; }
   .veredito .grande small { font-size: .4em; font-weight: 600; color: var(--apagado); }
@@ -338,6 +348,7 @@ export function gerarHtml(r) {
   <p>Como numa loja de verdade, a maioria só olha: de cada 10 usuários, 7 são curiosos (olham a programação e o mapa e vão embora) e 3 compram.
   Primeiro o público cresce aos poucos, para descobrir até onde o Ingressa aguenta. Depois, o pico:
   ${usuarios(p.usuariosPorSegundo)} por segundo, ${usuarios(p.engajadosPorSegundo)} muito engajados por segundo e ${p.robos} robôs cambistas, durante ${p.duracaoS} segundos.</p>
+  ${r.diagrama ? `<a class="diagrama" href="${r.diagrama}" target="_blank" rel="noopener">🖊️ Abrir a arquitetura desta etapa no Excalidraw</a>` : ''}
 </div></header>
 <main>
   <section class="veredito tripla">
@@ -417,12 +428,12 @@ export function gerarHtml(r) {
 
   <h2>2 · O pico: o sistema</h2>
   <div class="cartoes">
-    ${cartao('Ingressos vendidos', inteiro(r.vendidos), `de ${inteiro(r.lugares)} lugares, na rodada inteira`, pct(r.vendidos, r.lugares))}
+    ${cartao('Ingressos vendidos', inteiro(r.vendidos), `de ${inteiro(r.lugares)} lugares, na rodada inteira${r.reservados ? `, e mais ${inteiro(r.reservados)} reservados, esperando o pagamento` : ''}`, pct(r.vendidos, r.lugares))}
     ${cartao('Requisições respondidas', `${porSeg(p.respondidas)}/s`, `de ${porSeg(p.enviadas)}/s enviadas`, pct(p.respondidas, p.enviadas))}
     ${cartao('Compras concluídas', `${porSeg(p.compras)}/s`, `${inteiro(p.compras)} compras no pico`)}
     ${cartao('Pico de usuários ao mesmo tempo', inteiro(r.picoSimultaneos), 'no site no mesmo instante')}
     ${cartao('Barrados na porta', `${porSeg(p.barradosNaPorta)}/s`, `${inteiro(p.barradosNaPorta)} requisições recusadas pelo limite`)}
-    ${r.fila ? cartao('Fila de compras', inteiro(r.fila.maior), r.fila.esvaziouDepoisS === undefined ? 'no máximo esperando o worker; não esvaziou a tempo' : `no máximo esperando o worker; esvaziou ${Math.round(r.fila.esvaziouDepoisS)} s depois do fim`) : ''}
+    ${r.fila ? cartao('Fila de compras', inteiro(r.fila.maior), `no máximo esperando o worker. No fim do teste: ${descreverFila(r.fila)}`) : ''}
   </div>
 
   <h2>2 · O pico: a espera</h2>

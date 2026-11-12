@@ -16,6 +16,7 @@ A ordem é a ordem lógica do curso.
 | `02-cache` | O trabalho repetido | Redis guardando as respostas que são iguais para todo mundo |
 | `03-nginx` | A CPU que sobrava | Nginx balanceando 2 backends (o GIL do Python) |
 | `04-rate-limit` | O excesso no pico | o Nginx limita as requisições em andamento de cada endpoint |
+| `04b-async` | Esperar sem prender uma thread | a 04 com o Ingressa assíncrono: quando o async ajuda, e quando não |
 | `05-fila` | O que não precisa ser feito agora | a compra vai para uma fila; um worker conclui e avisa por e-mail |
 | `06-sala-de-espera` | Quem não pode ser perdido | senha, porteiro e passe: quem chega no pico espera a vez |
 | `07-mais-hardware` | O que o dinheiro resolve | a 06 com 8 CPUs e 8 GB, numa estreia 5 vezes maior |
@@ -94,6 +95,7 @@ o link).
 | `02-cache` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/02-cache/arquitetura.excalidraw) |
 | `03-nginx` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/03-nginx/arquitetura.excalidraw) |
 | `04-rate-limit` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04-rate-limit/arquitetura.excalidraw) |
+| `04b-async` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04b-async/arquitetura.excalidraw) |
 | `05-fila` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/05-fila/arquitetura.excalidraw) |
 | `06-sala-de-espera` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/06-sala-de-espera/arquitetura.excalidraw) |
 | `07-mais-hardware` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-mais-hardware/arquitetura.excalidraw) |
@@ -117,6 +119,7 @@ system-design-web-curso/
 ├── 02-cache/                    # cache das respostas iguais para todos (Redis)
 ├── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
 ├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
+├── 04b-async/                   # a 04 com o Ingressa assíncrono (async/await)
 ├── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
 ├── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
 ├── 07-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s
@@ -139,7 +142,7 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 
 | Componente | CPU | Memória | Observação |
 |------------|-----|---------|------------|
-| gateway-pagamento | 0.5 | 128 MB | **lento**: ~1,2 s por cobrança, 5% recusa |
+| gateway-pagamento | 0.5 | 128 MB | **lento**: ~3 s por cobrança, 5% recusa |
 | sistema-cinema | 2 | 256 MB | **rápido**: mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms, até 200 atendimentos simultâneos |
 | mailpit | 0.25 | 128 MB | SMTP falso, UI em :8025 |
 | k6 | sem limite | — | gerador de carga |

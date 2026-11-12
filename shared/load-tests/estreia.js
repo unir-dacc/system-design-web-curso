@@ -25,7 +25,7 @@ import exec from 'k6/execution';
 import { sleep } from 'k6';
 import { Counter, Gauge, Trend } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
-import { gerarHtml } from './relatorio.js';
+import { descreverFila, gerarHtml } from './relatorio.js';
 
 const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
 const CINEMA = 'http://sistema-cinema:8000';
@@ -37,7 +37,13 @@ const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
 // Cada rodada salva um resumo em relatorios/estreia.json. O relatório compara a
 // rodada atual com o último resumo das etapas ANTERIORES. As seguintes ficam de
 // fora: o resultado de uma aula que ainda não aconteceu não pode aparecer.
-const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '05-fila', '06-sala-de-espera', '07-mais-hardware', '08-go'];
+const PASTAS_DAS_ETAPAS = ['01-monolito', '02-cache', '03-nginx', '04-rate-limit', '04b-async', '05-fila', '06-sala-de-espera', '07-mais-hardware', '08-go'];
+// O diagrama da arquitetura desta etapa, para abrir no Excalidraw: "Etapa 04b · Async" fica na pasta 04b-async.
+const CODIGO_DA_ETAPA = (ETAPA.match(/^Etapa (\S+)/) || [])[1];
+const PASTA_DA_ETAPA = PASTAS_DAS_ETAPAS.find((pasta) => pasta.startsWith(`${CODIGO_DA_ETAPA}-`));
+const DIAGRAMA = PASTA_DA_ETAPA
+  ? `https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/${PASTA_DA_ETAPA}/arquitetura.excalidraw`
+  : null;
 const ETAPAS_ANTERIORES = new SharedArray('etapas anteriores', () =>
   PASTAS_DAS_ETAPAS.flatMap((pasta) => {
     try {
@@ -84,7 +90,7 @@ const ESPERA_NA_SALA_DO_ENGAJADO_MS = 10 * 60 * 1000; // o engajado espera o qua
 // O que é um site "viável"
 const META_PAGINA_MS = 2000; // programação e mapa
 const META_SALA_MS = 30000; // nas etapas com sala de espera: 95% esperam a vez em até 30 s
-const META_COMPRA_MS = 5000; // uma compra leva ~2,7 s só esperando o cinema e o gateway
+const META_COMPRA_MS = 5000; // uma compra leva ~3,5 s só esperando o cinema e o gateway
 const META_ERROS = 0.01;
 
 // Sessões e cambistas
@@ -139,12 +145,17 @@ const ingressosConfirmados = new Counter('ingressos_confirmados');
 
 // Conferidos no final
 const vendidos = new Gauge('ingressos_vendidos');
+const reservados = new Gauge('ingressos_reservados'); // assentos seguros, esperando o pagamento
 const naoRespondeu = new Gauge('ingressa_nao_respondeu');
 
-// Nas etapas com fila: quantas compras esperavam o worker, e quanto tempo depois
-// do fim da rodada a fila esvaziou
+// Nas etapas com fila: quantas compras esperavam o worker durante a rodada, e no
+// fim: quantas ainda faltavam, o ritmo do worker e quanto tempo falta para a
+// fila esvaziar (o teste não espera o worker terminar)
 const filaDeCompras = new Trend('fila_de_compras');
-const filaEsvaziouDepois = new Gauge('fila_esvaziou_depois_s');
+const filaNoFim = new Gauge('fila_no_fim');
+const ritmoDoWorker = new Gauge('ritmo_do_worker');
+const filaEsvaziaEm = new Gauge('fila_esvazia_em_s');
+const AMOSTRA_DO_RITMO_S = 10;
 
 // Nas etapas com sala de espera
 const passaramPelaSala = new Counter('usuarios_passaram_pela_sala');
@@ -304,7 +315,7 @@ export const options = {
     ),
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
-  teardownTimeout: '300s', // espera a fila de compras esvaziar e o Ingressa voltar
+  teardownTimeout: '150s', // mede o ritmo do worker e espera o Ingressa voltar
 };
 
 // --- Ações de um usuário ---
@@ -558,16 +569,25 @@ export function setup() {
 
 export function teardown() {
   // Nas etapas com fila, o worker continua concluindo compras depois que o
-  // público foi embora. Espera a fila esvaziar (até 3 min) antes de conferir.
-  const inicio = Date.now();
-  for (let i = 0; i < 180; i++) {
+  // público foi embora. O teste não espera ele terminar: conta quantas compras
+  // ainda faltam, mede por alguns segundos quantas o worker conclui por
+  // segundo, e estima quanto falta para a fila esvaziar.
+  const naFila = () => {
     const r = http.get(`${INGRESSA}/admin/fila`, { timeout: '10s', responseCallback: http.expectedStatuses(200, 404) });
-    if (r.status !== 200) break; // etapa sem fila
-    if (r.json('compras_na_fila') === 0) {
-      filaEsvaziouDepois.add((Date.now() - inicio) / 1000);
-      break;
+    return r.status === 200 ? r.json('compras_na_fila') : null; // null: etapa sem fila
+  };
+  const antes = naFila();
+  if (antes !== null) {
+    filaNoFim.add(antes);
+    if (antes === 0) {
+      filaEsvaziaEm.add(0);
+    } else {
+      sleep(AMOSTRA_DO_RITMO_S);
+      const depois = naFila();
+      const ritmo = Math.max(0, antes - depois) / AMOSTRA_DO_RITMO_S;
+      ritmoDoWorker.add(ritmo);
+      if (ritmo > 0) filaEsvaziaEm.add(AMOSTRA_DO_RITMO_S + depois / ritmo);
     }
-    sleep(1);
   }
 
   // Pedidos ainda em andamento continuam sendo processados no servidor.
@@ -580,8 +600,12 @@ export function teardown() {
     sleep(1);
   }
 
-  // Quem sabe quantos assentos foram vendidos é o cinema
-  if (estado) vendidos.add(SESSOES.reduce((total, s) => total + estado.sessoes[s].vendido, 0));
+  // Quem sabe quantos assentos foram vendidos é o cinema. Os reservados são as
+  // compras aceitas que ainda esperam o pagamento (nas etapas com fila, na fila)
+  if (estado) {
+    vendidos.add(SESSOES.reduce((total, s) => total + estado.sessoes[s].vendido, 0));
+    reservados.add(SESSOES.reduce((total, s) => total + estado.sessoes[s].reservado, 0));
+  }
 
   // O Ingressa ainda responde depois que o público foi embora? Ele tem até 1
   // minuto para terminar o que ficou preso: travou é não voltar mais.
@@ -729,6 +753,7 @@ function calcularResultado(data) {
 
   return {
     etapa: ETAPA,
+    diagrama: DIAGRAMA,
     lugares: SESSOES.length * 400,
     travou,
     subida: {
@@ -772,9 +797,19 @@ function calcularResultado(data) {
     // Nas etapas com sala de espera (null nas outras)
     sala: temSala ? { espera: espera('tempo_na_sala{scenario:pico}'), metaMs: META_SALA_MS } : null,
     // Nas etapas com fila (sem dados nas outras)
-    fila: v('fila_de_compras').max === undefined ? null : { maior: v('fila_de_compras').max, esvaziouDepoisS: v('fila_esvaziou_depois_s').value },
+    fila:
+      v('fila_de_compras').max === undefined
+        ? null
+        : {
+            maior: v('fila_de_compras').max,
+            noFim: v('fila_no_fim').value,
+            ritmo: v('ritmo_do_worker').value,
+            esvaziaEmS: v('fila_esvazia_em_s').value,
+            amostraS: AMOSTRA_DO_RITMO_S,
+          },
     picoSimultaneos: v('vus').max || 0,
     vendidos: totalVendidos,
+    reservados: v('ingressos_reservados').value || 0,
     // Vendido no cinema, mas ninguém viu a confirmação: a compra ainda não tinha respondido quando o teste acabou
     semConfirmacao: Math.max(0, totalVendidos - n('ingressos_confirmados')),
     metas: {
@@ -904,7 +939,7 @@ ${s.capacidade ? `    Velocidade por endpoint com ${s.capacidade.usuariosPorSegu
       Requisições por segundo ....... ${porSeg(p.respondidas)} respondidas de ${porSeg(p.enviadas)} enviadas
       Compras por segundo ........... ${porSeg(p.compras)}
       Pico de usuários ao mesmo tempo ${r.picoSimultaneos}
-      Barrados na porta ............. ${p.barradosNaPorta}  (${porSeg(p.barradosNaPorta)} por segundo)${r.fila ? `\n      Fila de compras ............... no máximo ${r.fila.maior} esperando o worker; esvaziou ${r.fila.esvaziouDepoisS === undefined ? "— (não esvaziou a tempo)" : `${Math.round(r.fila.esvaziouDepoisS)} s depois do fim`}` : ""}
+      Barrados na porta ............. ${p.barradosNaPorta}  (${porSeg(p.barradosNaPorta)} por segundo)${r.fila ? `\n      Fila de compras ............... no máximo ${r.fila.maior} esperando o worker\n      No fim do teste ................ ${descreverFila(r.fila)}` : ""}
 
     A espera
       Abrir uma página  metade em até ${seg(p.espera.pagina.mediana)}, 95% em até ${seg(p.espera.pagina.p95)}, o pior ${seg(p.espera.pagina.pior)}
@@ -913,7 +948,7 @@ ${s.capacidade ? `    Velocidade por endpoint com ${s.capacidade.usuariosPorSegu
     Velocidade por endpoint (todos os públicos)
 ${tabelaDeEndpoints(r.endpoints.pico)}
 
-  INGRESSOS VENDIDOS: ${r.vendidos} de ${r.lugares}
+  INGRESSOS VENDIDOS: ${r.vendidos} de ${r.lugares}${r.reservados ? ` (e mais ${r.reservados} reservados, esperando o pagamento)` : ''}
 
   METAS DO PICO
 ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
@@ -925,7 +960,7 @@ ${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios
 ${comparacao.join('\n')}
 
   Relatório para projetar: relatorios/estreia.html
-════════════════════════════════════════════════════════════════════
+${r.diagrama ? `  A arquitetura desta etapa, no Excalidraw: ${r.diagrama}\n` : ''}════════════════════════════════════════════════════════════════════
 `;
 }
 

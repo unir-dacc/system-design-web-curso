@@ -167,7 +167,7 @@ curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d
 docker compose run --rm --service-ports k6 run -e USUARIOS=3 /scripts/estreia.js
 
 # volta ao normal
-curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 1200}'
+curl -X PATCH localhost:8001/admin/config -H "Content-Type: application/json" -d '{"latencia_ms": 3000}'
 ```
 
 Experimente também `{"taxa_travamento": 0.2}`: algumas cobranças nunca respondem. E `{"taxa_erro": 0.3}`: o gateway responde com erro.
