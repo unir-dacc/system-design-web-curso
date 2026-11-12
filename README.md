@@ -79,13 +79,13 @@ Para ver o que mudou entre duas etapas:
 git diff --no-index <etapa-anterior> <etapa-seguinte>
 ```
 
-Cada etapa tem um `DEMO.md`, o roteiro da aula com os comandos na ordem.
+Cada etapa tem um `README.md`, o roteiro da aula com os comandos na ordem (o GitHub mostra ele ao abrir a pasta da etapa).
 
 ## Os diagramas
 
 Cada etapa tem o desenho da sua arquitetura: o público, as peças do Ingressa com a CPU e a memória
 de cada uma, e os sistemas externos. A peça nova de cada etapa está em amarelo. O link abre o
-desenho no Excalidraw, para desenhar por cima durante a aula (o `DEMO.md` de cada etapa também tem
+desenho no Excalidraw, para desenhar por cima durante a aula (o `README.md` de cada etapa também tem
 o link).
 
 | Etapa | Diagrama |
@@ -113,7 +113,7 @@ system-design-web-curso/
 │   ├── app/
 │   ├── docker-compose.yml
 │   ├── arquitetura.excalidraw   # o diagrama da etapa (abra no Excalidraw)
-│   └── DEMO.md
+│   └── README.md                # o roteiro da aula
 ├── 02-cache/                    # cache das respostas iguais para todos (Redis)
 ├── 03-nginx/                    # Nginx na frente de 2 backends (o orçamento onde está o gargalo)
 ├── 04-rate-limit/               # o Nginx limita as requisições em andamento por endpoint
