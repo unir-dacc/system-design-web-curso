@@ -171,7 +171,8 @@ system-design-web-curso/
 ├── shared/                      # igual para todas as etapas
 │   ├── compose.externos.yml     # sistemas externos com limites fixos
 │   ├── gateway-pagamento/       # gateway de pagamento simulado (lento)
-│   ├── sistema-cinema/          # sistema de assentos da rede de cinemas (rápido)
+│   ├── sistema-cinema/          # sistema de assentos da rede de cinemas (um legado razoável)
+│   ├── monitor/                 # a CPU e a memória de cada container, para o relatório
 │   ├── load-tests/estreia.js    # o teste de carga (k6)
 │   └── seed/catalogo.json       # filmes, salas e sessões
 ├── 01-monolito/                 # cada etapa é completa e roda sozinha
@@ -210,6 +211,7 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
 | gateway-pagamento | 0.5 | 128 MB | **lento**: ~3 s por cobrança, 5% recusa |
 | sistema-cinema | 2 | 256 MB | um pouco lento, mas não o gargalo: mapa ~150 ms, reserva ~100 ms, confirmação ~80 ms, até 200 atendimentos simultâneos |
 | mailpit | 0.25 | 128 MB | SMTP falso, UI em :8025 |
+| monitor | 0.25 | 64 MB | lê a CPU e a memória de cada container para o relatório |
 | k6 | sem limite | — | gerador de carga |
 
 ## Simuladores: mudando o comportamento ao vivo
