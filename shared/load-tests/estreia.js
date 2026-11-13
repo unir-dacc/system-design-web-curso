@@ -25,11 +25,13 @@ import exec from 'k6/execution';
 import { sleep } from 'k6';
 import { Counter, Gauge, Trend } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
-import { descreverFila, gerarHtml } from './relatorio.js';
+import { descreverFila, descreverPeca, gerarHtml, nomeDaPeca } from './relatorio.js';
 
 const INGRESSA = __ENV.BASE_URL || 'http://ingressa:8000';
 const CINEMA = 'http://sistema-cinema:8000';
 const GATEWAY = 'http://gateway-pagamento:8000';
+// Acompanha a CPU e a memória de cada container (shared/monitor)
+const MONITOR = 'http://monitor:8000';
 const ETAPA = __ENV.ETAPA || 'Ingressa';
 // O hardware do Ingressa nesta etapa (aparece na comparação entre etapas)
 const HARDWARE = __ENV.HARDWARE || '2 CPUs / 2 GB';
@@ -562,6 +564,8 @@ export function setup() {
   }
   // Toda rodada parte do zero (a configuração dos simuladores é mantida)
   for (const url of [INGRESSA, CINEMA, GATEWAY]) http.post(`${url}/admin/reset`);
+  // A série de CPU e memória começa junto com o teste
+  http.post(`${MONITOR}/reset`, null, { timeout: '5s' });
   // A etapa tem sala de espera? (as outras respondem 404)
   const temSala = http.post(`${INGRESSA}/sala`, null, { responseCallback: http.expectedStatuses(200, 404) }).status === 200;
   return { comecou: true, temSala };
@@ -952,7 +956,10 @@ ${tabelaDeEndpoints(r.endpoints.pico)}
 
   METAS DO PICO
 ${r.metas.lista.map((meta) => `    ${icone(meta.ok)} ${meta.texto}${meta.detalhe ? ` (${meta.detalhe})` : ''}`).join('\n')}
-${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}
+${r.subida.caiuEm ? `\n  ⚠️  O Ingressa CAIU ainda na subida (com ${usuarios(r.subida.caiuEm.usuariosPorSegundo)}/s), antes de o pico começar.\n` : ''}${r.travou ? '\n  ⚠️  O Ingressa TRAVOU e não voltou. Para destravar: docker compose restart ingressa\n' : ''}${r.recursos ? `
+  RECURSOS: o máximo de cada peça durante o teste (as réplicas somadas)
+${r.recursos.servicos.filter((s) => !s.externo).map((s) => `    ${`${nomeDaPeca(s)} `.padEnd(22, '.')} ${descreverPeca(s)}`).join('\n')}
+` : ''}
   3. COMPARAÇÃO COM AS ETAPAS ANTERIORES (último resultado de cada uma)
 
       etapa                          hardware         pico  aguenta   curiosos  compradores  compras/s   no fim
@@ -964,6 +971,19 @@ ${r.diagrama ? `  A arquitetura desta etapa, no Excalidraw: ${r.diagrama}\n` : '
 `;
 }
 
+// A CPU e a memória de cada peça durante o teste, do monitor. Sem o monitor
+// (uma etapa antiga, por exemplo), o relatório sai sem essa parte.
+function buscarRecursos() {
+  const r = http.get(`${MONITOR}/historico`, { timeout: '10s' });
+  if (r.status !== 200) return null;
+  const historico = r.json();
+  for (const s of historico.servicos) {
+    s.cpuMax = Math.max(0, ...s.cpu);
+    s.memMaxMb = Math.max(0, ...s.mem_mb);
+  }
+  return { ...historico, subidaS: SUBIDA_S, picoS: PICO_S };
+}
+
 export function handleSummary(data) {
   if (!data.setup_data) {
     return {
@@ -973,6 +993,7 @@ export function handleSummary(data) {
     };
   }
   const resultado = calcularResultado(data);
+  resultado.recursos = buscarRecursos();
   const resumo = resumir(resultado);
   resultado.comparacao = [...ETAPAS_ANTERIORES, { ...resumo, atual: true }].sort((a, b) => a.etapa.localeCompare(b.etapa));
   return {

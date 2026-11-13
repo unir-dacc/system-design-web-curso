@@ -36,6 +36,83 @@ function alertas(r) {
 
 // No fim do teste, a fila ainda tinha N compras: o worker conclui R por segundo,
 // e ela esvazia em T segundos (o teste não espera o worker terminar)
+// --- A CPU e a memória de cada peça (do monitor) ---
+
+const NOMES_DAS_PECAS = {
+  ingressa: 'backends',
+  nginx: 'Nginx',
+  postgres: 'Postgres',
+  redis: 'Redis',
+  worker: 'worker',
+  'gateway-pagamento': 'gateway de pagamento',
+  'sistema-cinema': 'sistema do cinema',
+  mailpit: 'Mailpit',
+};
+
+export function nomeDaPeca(s) {
+  const nome = NOMES_DAS_PECAS[s.nome] || s.nome;
+  return s.replicas > 1 ? `${nome} (${s.replicas})` : nome;
+}
+
+// "CPU 105% de 100% · memória 210 de 768 MB"
+export function descreverPeca(s) {
+  const cpu = s.cpu_limite ? `CPU ${Math.round(s.cpuMax)}% de ${Math.round(s.cpu_limite)}%` : `CPU ${Math.round(s.cpuMax)}% (sem limite)`;
+  const mem = s.mem_limite_mb ? `memória ${inteiro(s.memMaxMb)} de ${inteiro(s.mem_limite_mb)} MB` : `memória ${inteiro(s.memMaxMb)} MB`;
+  return `${cpu} · ${mem}`;
+}
+
+// Uma peça: a CPU e a memória ao longo do teste, em % do limite, com o pico marcado
+function graficoDaPeca(s, recursos) {
+  const L = 420, A = 150, esq = 40, dir = 8, topo = 10, base = 22;
+  const largura = L - esq - dir, altura = A - topo - base;
+  const n = Math.max(s.cpu.length, 2);
+  const duracaoS = n * recursos.intervalo_s;
+  const emPct = (valores, limite) => valores.map((v) => (limite ? (v / limite) * 100 : 0));
+  const cpu = emPct(s.cpu, s.cpu_limite);
+  const mem = emPct(s.mem_mb, s.mem_limite_mb);
+  const maximo = Math.max(100, ...cpu, ...mem) * 1.1;
+  const x = (i) => esq + (i / (n - 1)) * largura;
+  const xDoSegundo = (seg) => esq + Math.min(1, seg / duracaoS) * largura;
+  const y = (v) => topo + altura - (v / maximo) * altura;
+  const linha = (valores, cor) =>
+    `<polyline fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round" points="${valores.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>`;
+  const inicioPico = xDoSegundo(recursos.subidaS);
+  const fimPico = xDoSegundo(recursos.subidaS + recursos.picoS);
+  return `<svg viewBox="0 0 ${L} ${A}" width="100%" role="img" aria-label="CPU e memória de ${nomeDaPeca(s)} ao longo do teste, em porcentagem do limite">
+    <rect x="${inicioPico}" y="${topo}" width="${Math.max(0, fimPico - inicioPico)}" height="${altura}" fill="#fef9e7"/>
+    <text x="${(inicioPico + fimPico) / 2}" y="${A - 6}" text-anchor="middle" font-size="12" fill="#b45309">pico</text>
+    <text x="${esq}" y="${A - 6}" font-size="12" fill="#78716c">subida</text>
+    <line x1="${esq}" x2="${L - dir}" y1="${y(100)}" y2="${y(100)}" stroke="#b91c1c" stroke-dasharray="4 4"/>
+    <text x="${esq - 6}" y="${y(100) + 4}" text-anchor="end" font-size="12" fill="#b91c1c">100%</text>
+    <text x="${esq - 6}" y="${y(0) + 4}" text-anchor="end" font-size="12" fill="#78716c">0%</text>
+    ${s.mem_limite_mb ? linha(mem, '#d4a017') : ''}
+    ${s.cpu_limite ? linha(cpu, '#1c1917') : ''}
+  </svg>`;
+}
+
+function secaoDeRecursos(recursos) {
+  if (!recursos) return '';
+  const doIngressa = recursos.servicos.filter((s) => !s.externo);
+  const externos = recursos.servicos.filter((s) => s.externo);
+  const cartoes = doIngressa.map(
+    (s) => `<div class="bloco peca">
+      <div class="rotulo"><b>${nomeDaPeca(s)}</b></div>
+      ${graficoDaPeca(s, recursos)}
+      <div class="detalhe">No máximo: ${descreverPeca(s)}</div>
+    </div>`,
+  );
+  return `
+  <h2>3 · Os recursos: CPU e memória de cada peça</h2>
+  <p class="detalhe" style="margin:-6px 0 14px">Em porcentagem do limite de cada peça no orçamento (a linha vermelha). As réplicas estão somadas.</p>
+  <div class="pecas">${cartoes.join('')}</div>
+  <div class="legenda">
+    <span><i style="background:#1c1917"></i>CPU</span>
+    <span><i style="background:#d4a017"></i>memória</span>
+    <span><i style="background:#fef9e7"></i>o pico</span>
+  </div>
+  ${externos.length ? `<p class="detalhe">Sistemas externos, fora do orçamento: ${externos.map((s) => `${nomeDaPeca(s)} (${descreverPeca(s)})`).join('; ')}.</p>` : ''}`;
+}
+
 export function descreverFila(fila) {
   if (!fila.noFim) return 'a fila já estava vazia';
   if (!fila.ritmo) return `${fila.noFim} compras ainda na fila, e o worker não concluiu nenhuma em ${fila.amostraS} s`;
@@ -204,6 +281,8 @@ const ESTILO = `
   code { background: rgb(0 0 0 / .06); padding: 2px 6px; border-radius: 6px; }
   h2 { font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--apagado); margin: 40px 0 14px; }
   .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .pecas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .peca svg { margin: 8px 0 4px; }
   .cartao, .bloco { background: var(--papel); border-radius: 14px; padding: 20px; }
   .rotulo { color: var(--apagado); font-size: 14px; }
   .valor { font-size: 34px; font-weight: 800; margin: 4px 0; }
@@ -448,6 +527,8 @@ export function gerarHtml(r) {
   <div class="bloco">
     ${tabelaDeEndpoints(r.endpoints.pico)}
   </div>
+
+  ${secaoDeRecursos(r.recursos)}
 
   <h2>Metas do pico</h2>
   <div class="metas">${metas(r.metas.lista)}</div>

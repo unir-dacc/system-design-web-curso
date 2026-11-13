@@ -53,3 +53,17 @@ services:
         limits:
           cpus: "0.25"
           memory: 128M
+
+  # Monitor de recursos: acompanha a CPU e a memória de cada container durante
+  # o teste, para o relatório mostrar quanto cada peça usou do seu limite.
+  # Não é do Ingressa e fica fora do orçamento, como o k6. Lê o Docker pelo
+  # socket, só para consultar as estatísticas.
+  monitor:
+    build: ./monitor
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
