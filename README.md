@@ -83,6 +83,17 @@ git diff --no-index <etapa-anterior> <etapa-seguinte>
 
 Cada etapa tem um `README.md`, o roteiro da aula com os comandos na ordem (o GitHub mostra ele ao abrir a pasta da etapa).
 
+## Endereços
+
+| Serviço | URL |
+|---------|-----|
+| Ingressa (Swagger) | http://localhost:8000/docs |
+| Gateway de pagamento (Swagger) | http://localhost:8001/docs |
+| Sistema do cinema (Swagger) | http://localhost:8002/docs |
+| E-mails (Mailpit) | http://localhost:8025 |
+| Painel do k6 (durante um teste) | http://localhost:5665 |
+| Painel do banco (pgHero, opcional) | http://localhost:8080 |
+
 ## Os diagramas
 
 Cada etapa tem o desenho da sua arquitetura: o público, as peças do Ingressa com a CPU e a memória
@@ -186,14 +197,3 @@ Cartões de teste: `tok_aprovado` (sempre aprova), `tok_recusado` (sempre recusa
 - **CPF validado** pelos dígitos verificadores
 - Assentos **reservados** no cinema durante o pagamento (expiram em 10 min)
 - Ingresso com **QR code**, enviado por **e-mail**
-
-## Endereços
-
-| Serviço | URL |
-|---------|-----|
-| Ingressa (Swagger) | http://localhost:8000/docs |
-| Gateway de pagamento | http://localhost:8001/docs |
-| Sistema do cinema | http://localhost:8002/docs |
-| E-mails (Mailpit) | http://localhost:8025 |
-| Painel do k6 (durante um teste) | http://localhost:5665 |
-| Painel do banco (pgHero, opcional) | http://localhost:8080 |
