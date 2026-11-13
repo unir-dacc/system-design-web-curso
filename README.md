@@ -94,6 +94,47 @@ Cada etapa tem um `README.md`, o roteiro da aula com os comandos na ordem (o Git
 | Painel do k6 (durante um teste) | http://localhost:5665 |
 | Painel do banco (pgHero, opcional) | http://localhost:8080 |
 
+## Os sistemas externos
+
+O Ingressa depende de três sistemas que não são dele. São simulados, iguais em todas as etapas
+e ficam fora do orçamento do Ingressa. Os tempos variam ±30% a cada chamada, como num sistema de
+verdade, e tudo pode ser mudado ao vivo (veja [Simuladores](#simuladores-mudando-o-comportamento-ao-vivo)).
+
+### Sistema do cinema · http://localhost:8002/docs
+
+O sistema da rede de cinemas: é ele quem manda nos assentos.
+
+| | |
+|---|---|
+| O que faz | Mostra o mapa da sala, reserva, confirma e cancela assentos |
+| Tempo de resposta | mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms |
+| Quanto aguenta | até 200 atendimentos ao mesmo tempo; acima disso, o excedente espera numa fila |
+| Erros | nenhum no padrão (configurável: `taxa_erro` devolve 503) |
+| Garantias | a reserva é atômica: nunca vende o mesmo assento duas vezes. Reserva não confirmada expira em 10 min |
+| Hardware | 2 CPUs, 256 MB |
+
+### Gateway de pagamento · http://localhost:8001/docs
+
+Cobra o cartão. Aguenta muita carga, mas cada cobrança demora (antifraude, bandeira do cartão).
+
+| | |
+|---|---|
+| O que faz | Cobra o cartão e responde se aprovou ou recusou |
+| Tempo de resposta | **~3 s por cobrança** (entre 2,1 s e 3,9 s) |
+| Quanto aguenta | não limita as cobranças simultâneas: cada uma só espera, então cabem muitas ao mesmo tempo |
+| Recusas | 5% dos cartões; `tok_aprovado` sempre aprova, `tok_recusado` sempre recusa |
+| Erros | nenhum no padrão (configurável: `taxa_erro` devolve 500, `taxa_travamento` nunca responde) |
+| Garantias | o cabeçalho `Idempotency-Key` evita cobrar duas vezes a mesma compra |
+| Hardware | 0,5 CPU, 128 MB |
+
+Do lado do Ingressa, a cobrança tem um limite de 10 s. Passou disso, ele pergunta ao gateway se a
+cobrança aconteceu antes de liberar o assento.
+
+### E-mails (Mailpit) · http://localhost:8025
+
+Um servidor de e-mail falso, com uma página para ver as mensagens: é onde chegam as confirmações
+com os QR codes. Guarda até 5.000 mensagens. Hardware: 0,25 CPU, 128 MB.
+
 ## Os diagramas
 
 Cada etapa tem o desenho da sua arquitetura: o público, as peças do Ingressa com a CPU e a memória
