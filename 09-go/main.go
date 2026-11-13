@@ -1,4 +1,4 @@
-// Ingressa em Go: o mesmo sistema da etapa 07 (sala de espera, cache, fila
+// Ingressa em Go: o mesmo sistema da etapa 08 (sala de espera, cache, fila
 // com worker), com as mesmas rotas e as mesmas respostas, reescrito em Go.
 //
 //	ingressa          sobe o servidor HTTP (os backends)

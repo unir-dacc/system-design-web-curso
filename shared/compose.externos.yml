@@ -29,10 +29,10 @@ services:
     volumes:
       - ./seed:/seed:ro
     environment:
-      # Rápido: o sistema do cinema não deve ser o gargalo do Ingressa
-      LATENCIA_MAPA_MS: 50
-      LATENCIA_RESERVA_MS: 40
-      LATENCIA_CONFIRMACAO_MS: 30
+      # Um sistema legado razoável: um pouco lento, mas não o gargalo do Ingressa
+      LATENCIA_MAPA_MS: 150
+      LATENCIA_RESERVA_MS: 100
+      LATENCIA_CONFIRMACAO_MS: 80
       MAX_CONCORRENCIA: 200
       RESERVA_TTL_S: 600
     deploy:

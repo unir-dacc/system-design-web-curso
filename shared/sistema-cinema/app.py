@@ -6,7 +6,7 @@ assentos: o Ingressa precisa consultá-lo para mostrar o mapa da sala,
 reservar assentos e confirmar a venda.
 
 Comportamento:
-- é RÁPIDO no padrão, para não ser o gargalo do Ingressa. A latência e o
+- é um pouco lento, como um legado razoável, mas não o gargalo do Ingressa. A latência e o
   número de atendimentos simultâneos (max_concorrencia) são configuráveis
   ao vivo; acima do limite, o excedente espera numa fila
 - é CORRETO: a reserva é atômica, nunca vende o mesmo assento duas vezes
@@ -30,9 +30,9 @@ SEED_PATH = os.getenv("SEED_PATH", "/seed/catalogo.json")
 
 
 class Config(BaseModel):
-    latencia_mapa_ms: int = int(os.getenv("LATENCIA_MAPA_MS", "50"))
-    latencia_reserva_ms: int = int(os.getenv("LATENCIA_RESERVA_MS", "40"))
-    latencia_confirmacao_ms: int = int(os.getenv("LATENCIA_CONFIRMACAO_MS", "30"))
+    latencia_mapa_ms: int = int(os.getenv("LATENCIA_MAPA_MS", "150"))
+    latencia_reserva_ms: int = int(os.getenv("LATENCIA_RESERVA_MS", "100"))
+    latencia_confirmacao_ms: int = int(os.getenv("LATENCIA_CONFIRMACAO_MS", "80"))
     variacao_pct: int = int(os.getenv("VARIACAO_PCT", "30"))
     max_concorrencia: int = int(os.getenv("MAX_CONCORRENCIA", "200"))
     taxa_erro: float = float(os.getenv("TAXA_ERRO", "0"))

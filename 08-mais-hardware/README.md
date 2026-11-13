@@ -1,4 +1,4 @@
-# Aula 07: Mais hardware (o grande final)
+# Aula 08: Mais hardware (o grande final)
 
 > **Objetivo:** pegar a arquitetura que a turma construiu, dar a ela 4 vezes
 > mais hardware e enfrentar uma estreia 5 vezes maior. E discutir o que o
@@ -13,12 +13,12 @@
 
 A arquitetura é a mesma da etapa 06. Mudam o hardware (8 CPUs e 8 GB, em vez de 2 CPUs e 2 GB) e o tamanho da estreia no teste.
 
-**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-mais-hardware/arquitetura.excalidraw)**,
+**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-mais-hardware/arquitetura.excalidraw)**,
 para desenhar por cima durante a aula. A peça nova da etapa está em amarelo.
 
 ## 0. Preparação (antes da aula)
 
-Todos os comandos são rodados **dentro desta pasta** (`07-mais-hardware/`).
+Todos os comandos são rodados **dentro desta pasta** (`08-mais-hardware/`).
 
 ```bash
 docker compose down -v          # garante que começa do zero
@@ -59,7 +59,7 @@ xdg-open relatorios/estreia.html
 
 | Bloco | Perguntas |
 |-------|-----------|
-| O ganho de cada etapa | Compare a 07 com a 06 e com a 01. Quanto do ganho veio do hardware, e quanto da arquitetura? |
+| O ganho de cada etapa | Compare a 08 com a 06 e com a 01. Quanto do ganho veio do hardware, e quanto da arquitetura? |
 | A progressão das vendas | Até onde as vendas acompanham a procura agora? |
 | O pico: cada público | Alguém encontrou a sessão esgotada? O que isso quer dizer para o cinema? |
 | O pico: o sistema | A fila de compras e a sala de espera: até quanto cresceram? |

@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Ingressa", version="07-mais-hardware", lifespan=lifespan)
+app = FastAPI(title="Ingressa", version="08-mais-hardware", lifespan=lifespan)
 app.include_router(sala.router)
 app.include_router(catalogo.router)
 app.include_router(pedidos.router)

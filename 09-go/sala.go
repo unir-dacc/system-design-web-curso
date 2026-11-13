@@ -3,7 +3,7 @@ package main
 // Sala de espera (Redis): cada pessoa recebe uma senha; o porteiro (no
 // worker) libera um número fixo de senhas por segundo; quem é liberado
 // recebe um passe assinado (HMAC), exigido pela programação, pelo mapa e pela
-// compra. Igual à versão em Python (app/sala.py da etapa 07).
+// compra. Igual à versão em Python (app/sala.py da etapa 08).
 
 import (
 	"context"

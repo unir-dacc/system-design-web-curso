@@ -1,8 +1,8 @@
-# Aula 08: A etapa 07 reescrita em Go
+# Aula 09: A etapa 08 reescrita em Go
 
 > **Objetivo:** responder com medição a pergunta que todo dev faz um dia:
 > *"e se fosse em outra linguagem?"*. A arquitetura, o hardware e o teste são
-> os da etapa 07. Só a linguagem do Ingressa muda.
+> os da etapa 08. Só a linguagem do Ingressa muda.
 
 ```
  usuários ──▶ sala de espera ──▶ Nginx ──▶ 6 backends (Go) ──▶ fila ──▶ worker (Go)
@@ -10,29 +10,29 @@
                     └────────── Redis ───────────┴────── Postgres ───────┘
 ```
 
-O Nginx, o Postgres, o Redis, os sistemas externos, o hardware (8 CPUs e 8 GB) e a estreia (600 usuários por segundo) são exatamente os da 07.
+O Nginx, o Postgres, o Redis, os sistemas externos, o hardware (8 CPUs e 8 GB) e a estreia (600 usuários por segundo) são exatamente os da 08.
 
-**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-go/arquitetura.excalidraw)**,
+**[🖊️ Abrir o diagrama desta etapa no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/09-go/arquitetura.excalidraw)**,
 para desenhar por cima durante a aula. A peça nova da etapa está em amarelo.
 
 ## 0. Preparação (antes da aula)
 
-Todos os comandos são rodados **dentro desta pasta** (`08-go/`).
+Todos os comandos são rodados **dentro desta pasta** (`09-go/`).
 
 ```bash
 docker compose down -v          # garante que começa do zero
 docker compose up -d --build --wait
 ```
 
-Rode a estreia da etapa 07 antes da aula: o relatório desta etapa compara com o último resultado dela.
+Rode a estreia da etapa 08 antes da aula: o relatório desta etapa compara com o último resultado dela.
 
 ---
 
 ## 1. O mesmo Ingressa, em outra língua
 
-Abra lado a lado um arquivo da 07 e o equivalente aqui:
+Abra lado a lado um arquivo da 08 e o equivalente aqui:
 
-| Python (`../07-mais-hardware/app/`) | Go (`./`) |
+| Python (`../08-mais-hardware/app/`) | Go (`./`) |
 |-------------------------------------|-----------|
 | `compra.py` | `compra.go` |
 | `sala.py` e `routes/sala.py` | `sala.go` e `rotas.go` |
@@ -41,7 +41,7 @@ Abra lado a lado um arquivo da 07 e o equivalente aqui:
 
 Pergunta para a turma: *"o que é igual nos dois? O que o Go obriga a escrever que o Python escondia?"*
 
-Pergunta: *"em Python, um processo usava no máximo 1 CPU, por causa do GIL. E em Go? Por que a 07 tinha 6 backends, e esta também tem?"*
+Pergunta: *"em Python, um processo usava no máximo 1 CPU, por causa do GIL. E em Go? Por que a 08 tinha 6 backends, e esta também tem?"*
 
 ## 2. As mesmas respostas
 
@@ -52,7 +52,7 @@ curl -s localhost:8000/sala/1; echo                 # repita até liberar
 curl -s -H 'X-Passe: <cole o passe aqui>' localhost:8000/sessoes/7/assentos | head -c 200; echo
 ```
 
-👉 **Observe:** compare o passe e as respostas com as da etapa 07. O teste de carga é o mesmo, e não sabe em que linguagem o Ingressa foi escrito.
+👉 **Observe:** compare o passe e as respostas com as da etapa 08. O teste de carga é o mesmo, e não sabe em que linguagem o Ingressa foi escrito.
 
 ## 3. A estreia
 
@@ -65,12 +65,12 @@ xdg-open relatorios/estreia.html
 
 | Bloco | Perguntas |
 |-------|-----------|
-| O ganho de cada etapa | O que mudou em relação à 07? Em qual coluna o ganho aparece mais? |
+| O ganho de cada etapa | O que mudou em relação à 08? Em qual coluna o ganho aparece mais? |
 | A subida | Até onde cada versão aguentou? |
 | A velocidade de cada endpoint | Qual endpoint ficou mais rápido? Algum não mudou? Por quê? |
 | O pico: o sistema | A fila de compras e a sala de espera: o que mudou? |
 
-👉 **Observe também:** no `docker compose stats`, a CPU e a memória de cada backend, comparadas com as da 07. Agora, quem chega primeiro no limite?
+👉 **Observe também:** no `docker compose stats`, a CPU e a memória de cada backend, comparadas com as da 08. Agora, quem chega primeiro no limite?
 
 Pergunta: *"se o gargalo fosse o gateway de pagamento ou o sistema do cinema, trocar de linguagem ajudaria?"*
 

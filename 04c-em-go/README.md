@@ -4,7 +4,7 @@
 > de espera, eu reescrevesse tudo numa linguagem mais rápida?"*. A arquitetura
 > e o hardware são os da etapa 04 (Nginx com rate limit, 2 backends, cache, a
 > compra inteira dentro da requisição). Só a linguagem muda: o Ingressa é o
-> código Go da etapa 08, sem a fila e sem a sala de espera.
+> código Go da etapa 09, sem a fila e sem a sala de espera.
 
 ```
                                         ┌──────────────────────────────┐
@@ -46,7 +46,7 @@ pulasse tudo isso e só reescrevesse a 04 em Go, chegaria no resultado da 06?"* 
 | Arquivo | O que mostrar |
 |---------|---------------|
 | `compra.go` | A compra inteira dentro da requisição, como na 04: cobra, confirma, emite e manda o e-mail |
-| `rotas.go` | As mesmas rotas e respostas da 04. Compare com `../08-go/rotas.go`: o que sumiu? |
+| `rotas.go` | As mesmas rotas e respostas da 04. Compare com `../09-go/rotas.go`: o que sumiu? |
 | `docker-compose.yml` | O hardware é o da 04. O limite das compras no Nginx: por que é o da 04b, e não o da 04? |
 
 Pergunta: *"o que a linguagem consegue mudar numa compra que passa segundos esperando o gateway?"*
@@ -96,4 +96,4 @@ Deixe no quadro as perguntas que a turma levantou:
 
 - Quando trocar de linguagem resolve? E quando o problema é a arquitetura?
 - O que a fila e a sala de espera fazem que nenhuma linguagem faz?
-- E se a 06 inteira fosse reescrita em Go? (A etapa 08 responde, com mais hardware.)
+- E se a 06 inteira fosse reescrita em Go? (A etapa 09 responde, com mais hardware.)

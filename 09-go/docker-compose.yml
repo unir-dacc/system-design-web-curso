@@ -1,11 +1,12 @@
-# Etapa 07 - Mais hardware (o grande final)
+# Etapa 09 - A etapa 08 reescrita em Go
 #
-# A mesma arquitetura da etapa 06, agora com 8 CPUs e 8 GB para dividir entre
-# tudo o que é do Ingressa (as etapas 01 a 06 têm 2 CPUs e 2 GB). E um pico
-# bem maior no teste: 600 usuários por segundo.
+# A mesma arquitetura, o mesmo hardware (8 CPUs e 8 GB) e o mesmo teste da
+# etapa 08 (pico de 600 usuários por segundo). Muda só a linguagem: o
+# Ingressa (backends e worker) foi reescrito em Go, com as mesmas rotas, as
+# mesmas respostas e as mesmas regras.
 #   nginx:    0.5 CPU / 256 MB
 #   ingressa: 0.8 CPU / 768 MB, cada um (6 backends: 4,8 CPU no total)
-#   worker:   1.2 CPU / 768 MB          (150 threads; o porteiro libera 250 pessoas por segundo)
+#   worker:   1.2 CPU / 768 MB          (150 trabalhadores; o porteiro libera 250 pessoas por segundo)
 #   postgres: 1.0 CPU / 2 GB
 #   redis:    0.5 CPU / 512 MB
 # Os sistemas externos vêm de ../shared/compose.externos.yml e são iguais em todas as etapas.
@@ -51,7 +52,7 @@ services:
           cpus: "0.5"
           memory: 256M
 
-  # Os backends: o mesmo Ingressa da etapa 06, em 6 cópias. Nenhum guarda
+  # Os backends: o Ingressa em Go, em 6 cópias. Nenhum guarda
   # estado na própria memória (o cache está no Redis, os pedidos no Postgres),
   # então qualquer um pode atender qualquer requisição.
   # Para testar outro número: docker compose up -d --scale ingressa=3
@@ -84,14 +85,14 @@ services:
       mailpit:
         condition: service_started
 
-  # O worker: o mesmo código dos backends, rodando app/worker.py. Tira as
+  # O worker: o mesmo binário dos backends, rodando "ingressa worker". Tira as
   # compras da fila (no Redis) e conclui cada uma: cobra, confirma, emite os
   # ingressos e manda o e-mail. Também roda o porteiro da sala de espera.
   # Só um: ao subir, ele devolve para a fila as
   # compras que ficaram pela metade, e com dois um poderia pegar as do outro.
   worker:
     build: .
-    command: ["python", "-m", "app.worker"]
+    command: ["/ingressa", "worker"]
     # O teste de saúde do Dockerfile é o dos backends (HTTP); o worker não tem servidor
     healthcheck:
       disable: true
@@ -102,6 +103,8 @@ services:
       LIBERAR_POR_SEGUNDO: ${LIBERAR_POR_SEGUNDO:-250}
       # Ele devolve a conexão do banco antes de esperar o gateway: precisa de poucas
       DB_POOL: 20
+      # Cada trabalhador espera a fila com uma conexão própria com o Redis
+      REDIS_POOL: 200
     volumes:
       - ../shared/seed:/seed:ro
     depends_on:
@@ -191,8 +194,8 @@ services:
     environment:
       # O teste entra pela porta da frente, como um usuário
       BASE_URL: http://nginx:80
-      ETAPA: "Etapa 07 · Mais hardware"
-      # O grande final: uma estreia maior, e o hardware que a 07 tem
+      ETAPA: "Etapa 09 · Go"
+      # O grande final: uma estreia maior, e o hardware que a 08 tem
       USUARIOS: 600
       DEGRAUS: "4,8,16,32,64,128,192,256,384"
       HARDWARE: "8 CPUs / 8 GB"

@@ -20,8 +20,9 @@ A ordem é a ordem lógica do curso.
 | `04c-em-go` | A linguagem sem a arquitetura | a 04 reescrita em Go: dá para trocar a fila e a sala de espera por uma linguagem mais rápida? |
 | `05-fila` | O que não precisa ser feito agora | a compra vai para uma fila; um worker conclui e avisa por e-mail |
 | `06-sala-de-espera` | Quem não pode ser perdido | senha, porteiro e passe: quem chega no pico espera a vez |
-| `07-mais-hardware` | O que o dinheiro resolve | a 06 com 8 CPUs e 8 GB, numa estreia 5 vezes maior |
-| `08-go` | A linguagem | a 07 reescrita em Go, com o mesmo hardware e o mesmo teste |
+| `07-cdn` | A borda | o Nginx como uma CDN: responde a programação e o mapa sozinho e confere o passe da sala |
+| `08-mais-hardware` | O que o dinheiro resolve | a 06 com 8 CPUs e 8 GB, numa estreia 5 vezes maior |
+| `09-go` | A linguagem | a 08 reescrita em Go, com o mesmo hardware e o mesmo teste |
 
 ## Pré-requisitos
 
@@ -107,7 +108,7 @@ O sistema da rede de cinemas: é ele quem manda nos assentos.
 | | |
 |---|---|
 | O que faz | Mostra o mapa da sala, reserva, confirma e cancela assentos |
-| Tempo de resposta | mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms |
+| Tempo de resposta | mapa ~150 ms, reserva ~100 ms, confirmação ~80 ms |
 | Quanto aguenta | até 200 atendimentos ao mesmo tempo; acima disso, o excedente espera numa fila |
 | Erros | nenhum no padrão (configurável: `taxa_erro` devolve 503) |
 | Garantias | a reserva é atômica: nunca vende o mesmo assento duas vezes. Reserva não confirmada expira em 10 min |
@@ -152,8 +153,9 @@ o link).
 | `04c-em-go` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/04c-em-go/arquitetura.excalidraw) |
 | `05-fila` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/05-fila/arquitetura.excalidraw) |
 | `06-sala-de-espera` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/06-sala-de-espera/arquitetura.excalidraw) |
-| `07-mais-hardware` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-mais-hardware/arquitetura.excalidraw) |
-| `08-go` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-go/arquitetura.excalidraw) |
+| `07-cdn` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-cdn/arquitetura.excalidraw) |
+| `08-mais-hardware` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-mais-hardware/arquitetura.excalidraw) |
+| `09-go` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/09-go/arquitetura.excalidraw) |
 
 ## Os slides
 
@@ -184,8 +186,9 @@ system-design-web-curso/
 ├── 04c-em-go/                   # a 04 reescrita em Go: a linguagem contra a arquitetura
 ├── 05-fila/                     # a compra vai para uma fila, e um worker a conclui
 ├── 06-sala-de-espera/           # quem chega no pico pega uma senha e espera a vez
-├── 07-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s
-└── 08-go/                       # a 07 reescrita em Go: mesmo hardware, mesmo teste
+├── 07-cdn/                      # a borda: o Nginx como uma CDN (microcache e passe conferido nele)
+├── 08-mais-hardware/            # o grande final: a 06 com 8 CPUs, 8 GB e um pico de 600/s
+└── 09-go/                       # a 08 reescrita em Go: mesmo hardware, mesmo teste
 ```
 
 ## Comparação justa entre etapas
@@ -198,14 +201,14 @@ Todos os `docker-compose.yml` limitam CPU e memória. As regras:
    dele (app, banco e o que entrar depois, como Redis, worker ou Nginx). Uma peça nova não
    ganha hardware novo: ela divide o orçamento com as outras. Cada etapa mostra a divisão
    no topo do seu compose. Os ganhos vêm da arquitetura, nunca de máquina maior. A exceção é
-   a etapa 07 (e a 08, que a repete em Go): ela existe para mostrar o que mais hardware faz.
+   a etapa 08 (e a 09, que a repete em Go): ela existe para mostrar o que mais hardware faz.
 3. **Cada medição começa do zero**: os testes de carga limpam o estado antes de rodar.
 4. **O gerador de carga (k6) roda num container separado**, sem limite de CPU, fora do orçamento.
 
 | Componente | CPU | Memória | Observação |
 |------------|-----|---------|------------|
 | gateway-pagamento | 0.5 | 128 MB | **lento**: ~3 s por cobrança, 5% recusa |
-| sistema-cinema | 2 | 256 MB | **rápido**: mapa ~50 ms, reserva ~40 ms, confirmação ~30 ms, até 200 atendimentos simultâneos |
+| sistema-cinema | 2 | 256 MB | um pouco lento, mas não o gargalo: mapa ~150 ms, reserva ~100 ms, confirmação ~80 ms, até 200 atendimentos simultâneos |
 | mailpit | 0.25 | 128 MB | SMTP falso, UI em :8025 |
 | k6 | sem limite | — | gerador de carga |
 
