@@ -103,10 +103,17 @@ o link).
 | `07-mais-hardware` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/07-mais-hardware/arquitetura.excalidraw) |
 | `08-go` | [abrir no Excalidraw](https://excalidraw.com/#url=https://raw.githubusercontent.com/unir-dacc/system-design-web-curso/main/08-go/arquitetura.excalidraw) |
 
+## Os slides
+
+Os slides do mini curso estão em [`slides/mini-curso-system-design.pdf`](slides/mini-curso-system-design.pdf):
+a abertura e os conceitos básicos (como a web funciona, HTTP, APIs, o que acontece dentro do
+servidor, banco de dados, como medir, teste de carga e containers), antes do protótipo.
+
 ## Estrutura
 
 ```
 system-design-web-curso/
+├── slides/                      # os slides do mini curso, em PDF
 ├── shared/                      # igual para todas as etapas
 │   ├── compose.externos.yml     # sistemas externos com limites fixos
 │   ├── gateway-pagamento/       # gateway de pagamento simulado (lento)
